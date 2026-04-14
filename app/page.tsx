@@ -710,14 +710,17 @@ export default function Page() {
                           key={dateKey}
                           onClick={() => setSelectedDate(dateKey)}
                           className={`min-h-[84px] rounded-2xl border p-2 text-left transition hover:shadow-sm ${
-                            isSelected ? "border-2 border-emerald-500 bg-white ring-2 ring-emerald-100" : "border-slate-200 bg-white"
+                            isSelected
+                              ? "border-2 border-emerald-500 ring-2 ring-emerald-100"
+                              : hasOwnSelection
+                                ? "border-blue-200 bg-blue-50"
+                                : "border-slate-200 bg-white"
                           } ${!inCurrentMonth ? "opacity-40" : "opacity-100"}`}
                         >
                           <div className="flex items-center justify-between">
-                            <span className={`text-sm font-medium ${hasOwnSelection ? "text-blue-600" : "text-slate-900"}`}>{date.getDate()}</span>
+                            <span className={`text-sm font-medium ${hasOwnSelection ? "text-blue-700" : "text-slate-900"}`}>{date.getDate()}</span>
                             <div className="flex items-center gap-1">
                               {isToday && <Badge variant="secondary">Heute</Badge>}
-                              {hasOwnSelection && <Badge variant="outline" className="border-blue-200 text-blue-600">Ausgewählt</Badge>}
                               {heat > 0 && <Badge variant="outline">{heat} frei</Badge>}
                             </div>
                           </div>
