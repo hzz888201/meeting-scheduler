@@ -8,7 +8,15 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { motion } from "framer-motion";
-import { Users, CheckCircle2, ChevronLeft, ChevronRight, Save } from "lucide-react";
+import {
+  Users,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Save,
+  Mail,
+  LogOut,
+} from "lucide-react";
 
 type PersonAvailability = Record<string, string[]>;
 
@@ -212,6 +220,13 @@ function formatWeekRange(weekStart: Date): string {
   return `${startMonth} ${weekStart.getDate()} – ${endMonth} ${end.getDate()}, ${year}`;
 }
 
+function getMagicLinkRedirectUrl(pollId: string): string {
+  if (typeof window === "undefined") return "";
+  const url = new URL(window.location.origin + window.location.pathname);
+  url.searchParams.set("poll", pollId);
+  return url.toString();
+}
+
 export default function Page() {
   const [pollId, setPollId] = useState(DEFAULT_POLL_ID);
   const [weekStart, setWeekStart] = useState<Date>(getWeekStart(new Date()));
@@ -227,7 +242,12 @@ export default function Page() {
   const [saveMessage, setSaveMessage] = useState("");
   const [currentUserId, setCurrentUserId] = useState("");
   const [authReady, setAuthReady] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
   const [authError, setAuthError] = useState("");
+  const [emailInput, setEmailInput] = useState("");
+  const [sessionEmail, setSessionEmail] = useState("");
+  const [isSendingMagicLink, setIsSendingMagicLink] = useState(false);
+  const [authMessage, setAuthMessage] = useState("");
 
   const supabaseRef = useRef<SupabaseClient | null>(null);
   const weekDays = useMemo(() => getWeekDays(weekStart), [weekStart]);
@@ -237,11 +257,15 @@ export default function Page() {
     : (savedMyName || myName).trim();
 
   const activeParticipant = savedMyName || myName;
+  const isLoggedIn = !supabaseRef.current || Boolean(currentUserId);
 
   useEffect(() => {
     setPollId(getPollId());
     supabaseRef.current = createSupabaseBrowserClient();
-    setAuthReady(!supabaseRef.current);
+    if (!supabaseRef.current) {
+      setAuthReady(true);
+      setAuthChecked(true);
+    }
     setActiveCalendarView("all");
   }, []);
 
@@ -257,6 +281,11 @@ export default function Page() {
       return;
     }
 
+    if (!currentUserId) {
+      setAvailability({});
+      return;
+    }
+
     const { data, error } = await supabase
       .from("meeting_availability")
       .select("participant_name, owner_user_id, date_key, slots")
@@ -269,6 +298,63 @@ export default function Page() {
     } else {
       setAvailability(inflateRowsToAvailability((data || []) as MeetingRow[]));
     }
+  }
+
+  async function sendMagicLink(): Promise<void> {
+    const supabase = supabaseRef.current;
+    const trimmedEmail = emailInput.trim();
+
+    if (!supabase) {
+      setAuthMessage("Supabase ist nicht konfiguriert. Magic Link ist im Demo-Modus nicht verfügbar.");
+      return;
+    }
+
+    if (!trimmedEmail) {
+      setAuthMessage("Bitte geben Sie eine E-Mail-Adresse ein.");
+      return;
+    }
+
+    setIsSendingMagicLink(true);
+    setAuthMessage("");
+    setAuthError("");
+
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: trimmedEmail,
+        options: {
+          emailRedirectTo: getMagicLinkRedirectUrl(pollId),
+          shouldCreateUser: true,
+        },
+      });
+
+      if (error) throw error;
+
+      setAuthMessage("Der Magic Link wurde versendet. Bitte prüfen Sie Ihr E-Mail-Postfach.");
+    } catch (error) {
+      console.error(error);
+      setAuthMessage("Der Magic Link konnte nicht gesendet werden. Bitte prüfen Sie Auth-Einstellungen und Redirect-URLs.");
+    } finally {
+      setIsSendingMagicLink(false);
+    }
+  }
+
+  async function signOut(): Promise<void> {
+    const supabase = supabaseRef.current;
+    if (!supabase) return;
+
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      setAuthMessage("Abmeldung fehlgeschlagen.");
+      return;
+    }
+
+    setCurrentUserId("");
+    setSessionEmail("");
+    setAvailability({});
+    setDraftAvailability({});
+    setIsDirty(false);
+    setAuthReady(false);
+    setAuthMessage("Sie wurden abgemeldet.");
   }
 
   useEffect(() => {
@@ -293,52 +379,42 @@ export default function Page() {
 
       const supabase = supabaseRef.current;
 
-      if (supabase) {
-        const {
-          data: { session },
-          error: sessionError,
-        } = await supabase.auth.getSession();
-
-        if (sessionError) {
-          if (!ignore) {
-            setSaveMessage("Anmeldestatus konnte nicht gelesen werden. Bitte Supabase Auth prüfen.");
-            setAuthError("Anmeldestatus konnte nicht gelesen werden. Bitte Supabase Auth prüfen.");
-            setAuthReady(false);
-            setIsLoading(false);
-          }
-          return;
-        }
-
-        let activeSession = session;
-
-        if (!activeSession) {
-          const { data: anonData, error: anonError } = await supabase.auth.signInAnonymously();
-
-          if (anonError) {
-            if (!ignore) {
-              setSaveMessage(
-                "Anonyme Anmeldung fehlgeschlagen. Bitte Anonymous Sign-ins in Supabase Auth aktivieren."
-              );
-              setAuthError(
-                "Anonyme Anmeldung fehlgeschlagen. Bitte Anonymous Sign-ins in Supabase Auth aktivieren."
-              );
-              setAuthReady(false);
-              setIsLoading(false);
-            }
-            return;
-          }
-
-          activeSession = anonData.session;
-        }
-
+      if (!supabase) {
+        await fetchAllAvailability();
         if (!ignore) {
-          setCurrentUserId(activeSession?.user?.id || "");
-          setAuthReady(Boolean(activeSession?.user?.id));
-          setAuthError("");
+          setIsLoading(false);
+          setAuthChecked(true);
         }
+        return;
       }
 
-      await fetchAllAvailability();
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError) {
+        if (!ignore) {
+          setSaveMessage("Anmeldestatus konnte nicht gelesen werden. Bitte Supabase Auth prüfen.");
+          setAuthError("Anmeldestatus konnte nicht gelesen werden. Bitte Supabase Auth prüfen.");
+          setAuthReady(false);
+          setAuthChecked(true);
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      if (!ignore) {
+        setCurrentUserId(session?.user?.id || "");
+        setSessionEmail(session?.user?.email || "");
+        setAuthReady(Boolean(session?.user?.id));
+        setAuthChecked(true);
+        setAuthError("");
+      }
+
+      if (session?.user?.id) {
+        await fetchAllAvailability();
+      }
 
       if (!ignore) setIsLoading(false);
     }
@@ -402,19 +478,26 @@ export default function Page() {
           filter: `poll_id=eq.${pollId}`,
         },
         async () => {
-          await fetchAllAvailability();
+          if (currentUserId) {
+            await fetchAllAvailability();
+          }
         }
       )
       .subscribe();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      setCurrentUserId(session?.user?.id || "");
-      setAuthReady(Boolean(session?.user?.id));
-      if (session?.user?.id) setAuthError("");
-      if (event === "SIGNED_OUT") {
-        setSaveMessage("Die Sitzung ist abgelaufen. Bitte Seite neu laden.");
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const nextUserId = session?.user?.id || "";
+      setCurrentUserId(nextUserId);
+      setSessionEmail(session?.user?.email || "");
+      setAuthReady(Boolean(nextUserId));
+      setAuthChecked(true);
+      if (nextUserId) {
+        setAuthError("");
+        await fetchAllAvailability();
+      } else {
+        setAvailability({});
       }
     });
 
@@ -422,7 +505,7 @@ export default function Page() {
       void supabase.removeChannel(channel);
       subscription.unsubscribe();
     };
-  }, [pollId]);
+  }, [pollId, currentUserId]);
 
   const participants = useMemo(
     () =>
@@ -570,7 +653,7 @@ export default function Page() {
     const supabase = supabaseRef.current;
 
     if (supabase && (!authReady || !currentUserId)) {
-      setSaveMessage("Die anonyme Anmeldung ist noch nicht bereit. Bitte kurz warten und erneut versuchen.");
+      setSaveMessage("Bitte melden Sie sich zuerst per Magic Link an.");
       return;
     }
 
@@ -631,7 +714,7 @@ export default function Page() {
     } catch (error) {
       console.error(error);
       setSaveMessage(
-        "Speichern fehlgeschlagen. Bitte Tabellenstruktur, RLS-Policy, anonyme Anmeldung und Netzwerk prüfen."
+        "Speichern fehlgeschlagen. Bitte Tabellenstruktur, RLS-Policy, Auth-Einstellungen und Netzwerk prüfen."
       );
     } finally {
       setIsSaving(false);
@@ -670,7 +753,7 @@ export default function Page() {
     <div className="min-h-screen bg-[#f6f7f4] p-3 sm:p-4 lg:p-6">
       <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-4 lg:gap-6">
         <div className="rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="text-3xl font-bold text-slate-900">Terminabstimung</div>
+          <div className="text-3xl font-bold text-slate-900">Terminabstimunger</div>
           <div className="mt-2 text-base text-slate-600 sm:text-lg">
             Meeting: Weiterentwicklung KS-Schallschutzrechners
           </div>
@@ -680,6 +763,67 @@ export default function Page() {
             Ihre Auswahl.
           </div>
         </div>
+
+        {supabaseRef.current && (
+          <Card className="rounded-2xl shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-xl">
+                <Mail className="h-5 w-5" />
+                Anmeldung per Magic Link
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {!isLoggedIn ? (
+                <>
+                  <div className="flex flex-col gap-3 xl:flex-row">
+                    <Input
+                      value={emailInput}
+                      onChange={(e) => setEmailInput(e.target.value)}
+                      placeholder="Ihre E-Mail-Adresse"
+                      onKeyDown={(e) => e.key === "Enter" && void sendMagicLink()}
+                      className="h-11 rounded-xl"
+                    />
+                    <Button
+                      onClick={() => void sendMagicLink()}
+                      className="h-11 rounded-xl"
+                      disabled={isSendingMagicLink}
+                    >
+                      {isSendingMagicLink ? "Wird gesendet…" : "Magic Link senden"}
+                    </Button>
+                  </div>
+
+                  <div className="text-sm text-slate-500">
+                    Melden Sie sich mit Ihrer E-Mail-Adresse an. Danach können Sie Ihre eigenen
+                    Zeitfenster bearbeiten und speichern.
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-2 text-sm text-slate-700">
+                    <span>Angemeldet als</span>
+                    <Badge variant="secondary">{sessionEmail || "Benutzer"}</Badge>
+                  </div>
+                  <Button variant="outline" className="gap-2 rounded-xl" onClick={() => void signOut()}>
+                    <LogOut className="h-4 w-4" />
+                    Abmelden
+                  </Button>
+                </div>
+              )}
+
+              {authMessage && (
+                <div className="rounded-2xl bg-slate-100 p-4 text-sm text-slate-600">
+                  {authMessage}
+                </div>
+              )}
+
+              {authError && (
+                <div className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-800">
+                  {authError}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <Card className="rounded-2xl shadow-sm">
           <CardHeader>
@@ -696,8 +840,9 @@ export default function Page() {
                 placeholder="Ihren Namen eingeben"
                 onKeyDown={(e) => e.key === "Enter" && registerMe()}
                 className="h-11 rounded-xl"
+                disabled={!isLoggedIn}
               />
-              <Button onClick={registerMe} className="h-11 rounded-xl">
+              <Button onClick={registerMe} className="h-11 rounded-xl" disabled={!isLoggedIn}>
                 Bestätigen
               </Button>
             </div>
@@ -733,12 +878,15 @@ export default function Page() {
 
             {isLoading ? (
               <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
-                Daten und anonyme Anmeldung werden vorbereitet…
+                Daten werden geladen…
               </div>
-            ) : supabaseRef.current && !authReady ? (
+            ) : supabaseRef.current && !authChecked ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
+                Anmeldestatus wird geprüft…
+              </div>
+            ) : supabaseRef.current && !isLoggedIn ? (
               <div className="rounded-2xl border border-dashed border-amber-300 p-4 text-sm text-amber-700">
-                {authError ||
-                  "Die anonyme Anmeldung ist noch nicht bereit. Bitte Supabase Auth prüfen und die Seite neu laden."}
+                Bitte melden Sie sich zuerst per Magic Link an.
               </div>
             ) : null}
 
@@ -760,7 +908,7 @@ export default function Page() {
           <Alert className="rounded-2xl border-amber-200 bg-amber-50">
             <AlertDescription className="text-sm leading-6 text-amber-900">
               NEXT_PUBLIC_SUPABASE_URL und NEXT_PUBLIC_SUPABASE_ANON_KEY sind noch nicht gesetzt.
-              Die Seite läuft nur im lokalen Demo-Modus.
+              Die Seite läuft nur im lokalen Demo-Modus ohne Magic Link.
             </AlertDescription>
           </Alert>
         )}
@@ -805,7 +953,7 @@ export default function Page() {
               <Button
                 className="h-9 w-full gap-2 rounded-[16px] sm:h-11 sm:w-auto sm:rounded-[18px] lg:h-14 lg:rounded-[22px] lg:px-6 lg:text-lg"
                 onClick={() => void saveMyAvailability()}
-                disabled={isSaving || !savedMyName || !isDirty || !canEditCurrentView}
+                disabled={isSaving || !savedMyName || !isDirty || !canEditCurrentView || !isLoggedIn}
               >
                 <Save className="h-4 w-4 lg:h-5 lg:w-5" />
                 {isSaving ? "Wird gespeichert…" : "Auswahl speichern"}
@@ -825,15 +973,18 @@ export default function Page() {
                 dieses Zeitfenster gewählt hat. Hellgrüne Felder zeigen bereits gewählte
                 Zeitfenster im gemeinsamen Kalender. Dunkelgrüne Felder markieren die aktuell
                 beliebtesten drei Zeitfenster im gemeinsamen Kalender. Ein blauer Rand bedeutet,
-                dass Sie dieses Zeitfenster in Ihrem eigenen Entwurf ausgewählt haben.
+                dass Sie dieses Zeitfenster in Ihrem eigenen Entwurf ausgewählt haben. Die Zahl im
+                Feld zeigt, wie viele Teilnehmende dieses Zeitfenster gewählt haben – im Verhältnis
+                zur Gesamtzahl aller Teilnehmenden.
               </div>
             </div>
           </CardHeader>
 
           <CardContent className="p-2 sm:p-3 lg:p-5">
-            <div className="w-full">
-              <div className="grid w-full grid-cols-[64px_repeat(7,minmax(0,1fr))] gap-1 sm:grid-cols-[78px_repeat(7,minmax(0,1fr))] sm:gap-1.5 md:grid-cols-[88px_repeat(7,minmax(0,1fr))] lg:grid-cols-[110px_repeat(7,minmax(0,1fr))] lg:gap-3">
-                <div />
+            <div className="w-full overflow-auto rounded-[24px] border border-slate-100 max-h-[75vh]">
+              <div className="grid min-w-[900px] grid-cols-[64px_repeat(7,minmax(0,1fr))] gap-1 bg-[#f6f7f4] p-1 sm:grid-cols-[78px_repeat(7,minmax(0,1fr))] sm:gap-1.5 sm:p-1.5 md:grid-cols-[88px_repeat(7,minmax(0,1fr))] lg:grid-cols-[110px_repeat(7,minmax(0,1fr))] lg:gap-3 lg:p-3">
+                <div className="sticky left-0 top-0 z-40 rounded-[14px] bg-[#f6f7f4]" />
+
                 {weekDays.map((day, index) => {
                   const dateKey = formatDateKey(day);
                   const ownDraftHasSelection = Boolean((draftAvailability[dateKey] || []).length);
@@ -842,8 +993,10 @@ export default function Page() {
                   return (
                     <div
                       key={dateKey}
-                      className={`rounded-[18px] border border-slate-200 bg-white px-1 py-2 text-center sm:rounded-[22px] sm:px-2 sm:py-3 lg:rounded-[28px] lg:px-3 lg:py-5 ${
-                        activeCalendarView === "all" && ownDraftHasSelection ? "bg-blue-50" : ""
+                      className={`sticky top-0 z-30 rounded-[18px] border border-slate-200 px-1 py-2 text-center shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/90 sm:rounded-[22px] sm:px-2 sm:py-3 lg:rounded-[28px] lg:px-3 lg:py-5 ${
+                        activeCalendarView === "all" && ownDraftHasSelection
+                          ? "bg-blue-50"
+                          : "bg-white"
                       }`}
                     >
                       <div className="text-[10px] uppercase tracking-wide text-slate-500 sm:text-xs">
@@ -869,7 +1022,7 @@ export default function Page() {
 
                 {TIME_SLOTS.map((slot) => (
                   <React.Fragment key={slot.id}>
-                    <div className="flex items-start rounded-[16px] border border-slate-200 bg-white px-1.5 py-2 text-[10px] font-medium leading-tight text-slate-700 sm:rounded-[20px] sm:px-2.5 sm:py-3 sm:text-xs md:text-sm lg:rounded-[28px] lg:px-4 lg:py-6 lg:text-xl xl:text-2xl">
+                    <div className="sticky left-0 z-20 flex items-start rounded-[16px] border border-slate-200 bg-white px-1.5 py-2 text-[10px] font-medium leading-tight text-slate-700 shadow-sm sm:rounded-[20px] sm:px-2.5 sm:py-3 sm:text-xs md:text-sm lg:rounded-[28px] lg:px-4 lg:py-6 lg:text-xl xl:text-2xl">
                       {slot.label}
                     </div>
 
@@ -921,19 +1074,21 @@ export default function Page() {
                         <button
                           key={`${dateKey}-${slot.id}`}
                           type="button"
-                          disabled={isForeignPersonalView}
+                          disabled={isForeignPersonalView || !isLoggedIn}
                           onClick={() => {
-                            if (!isForeignPersonalView) {
+                            if (!isForeignPersonalView && isLoggedIn) {
                               toggleCell(dateKey, slot.id);
                             }
                           }}
                           className={`relative min-h-[52px] rounded-[14px] px-1 py-1 text-left transition sm:min-h-[68px] sm:rounded-[18px] sm:px-1.5 sm:py-1.5 md:min-h-[82px] md:rounded-[20px] lg:min-h-[112px] lg:rounded-[28px] lg:px-4 lg:py-4 ${
-                            isForeignPersonalView ? "cursor-default opacity-100" : "cursor-pointer"
+                            isForeignPersonalView || !isLoggedIn
+                              ? "cursor-default opacity-100"
+                              : "cursor-pointer"
                           } ${
                             isFilledInCurrentView
                               ? `${borderClass} ${filledClass}`
                               : `${borderClass} bg-white text-slate-800 ${
-                                  isForeignPersonalView ? "" : "hover:bg-slate-50"
+                                  isForeignPersonalView || !isLoggedIn ? "" : "hover:bg-slate-50"
                                 }`
                           }`}
                         >
