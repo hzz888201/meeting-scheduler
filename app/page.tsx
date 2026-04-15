@@ -636,7 +636,9 @@ export default function Page() {
                             onClick={() => toggleCell(dateKey, slot.id)}
                             className={`relative min-h-[96px] border-r border-t border-slate-100 px-3 py-3 transition ${
                               isTopThree
-                                ? "bg-green-500 text-white hover:bg-green-500"
+                                ? selected
+                                  ? "bg-green-500 text-white hover:bg-green-500 border-4 border-green-700"
+                                  : "bg-green-500 text-white hover:bg-green-500"
                                 : selected
                                   ? "bg-blue-500 text-white hover:bg-blue-500"
                                   : "bg-white hover:bg-slate-50"
