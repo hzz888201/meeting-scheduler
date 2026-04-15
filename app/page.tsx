@@ -8,16 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { motion } from "framer-motion";
-import {
-  CalendarDays,
-  Users,
-  CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
-  Save,
-  RefreshCw,
-  Trash2,
-} from "lucide-react";
+import { CalendarDays, Users, CheckCircle2, ChevronLeft, ChevronRight, Save, RefreshCw } from "lucide-react";
 
 type AvailabilityMap = Record<string, Record<string, string[]>>;
 type PersonAvailability = Record<string, string[]>;
@@ -152,7 +143,6 @@ function getWeekDays(weekStart: Date): Date[] {
 function formatWeekRange(weekStart: Date): string {
   const end = new Date(weekStart);
   end.setDate(weekStart.getDate() + 6);
-
   const sameMonth = weekStart.getMonth() === end.getMonth() && weekStart.getFullYear() === end.getFullYear();
   const startDay = weekStart.getDate();
   const endDay = end.getDate();
@@ -176,7 +166,6 @@ export default function Page() {
   const [savedMyName, setSavedMyName] = useState("");
   const [availability, setAvailability] = useState<AvailabilityMap>({});
   const [draftAvailability, setDraftAvailability] = useState<PersonAvailability>({});
-  const [participantToDelete, setParticipantToDelete] = useState("");
   const [isDirty, setIsDirty] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -287,7 +276,6 @@ export default function Page() {
     }
 
     void init();
-
     return () => {
       ignore = true;
     };
@@ -323,12 +311,7 @@ export default function Page() {
       .channel(`meeting-poll-${pollId}`)
       .on(
         "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "meeting_availability",
-          filter: `poll_id=eq.${pollId}`,
-        },
+        { event: "*", schema: "public", table: "meeting_availability", filter: `poll_id=eq.${pollId}` },
         async () => {
           await fetchAllAvailability(false);
         }
@@ -341,9 +324,7 @@ export default function Page() {
       setCurrentUserId(session?.user?.id || "");
       setAuthReady(Boolean(session?.user?.id));
       if (session?.user?.id) setAuthError("");
-      if (event === "SIGNED_OUT") {
-        setSaveMessage("Die Sitzung ist abgelaufen. Bitte Seite neu laden.");
-      }
+      if (event === "SIGNED_OUT") setSaveMessage("Die Sitzung ist abgelaufen. Bitte Seite neu laden.");
     });
 
     return () => {
@@ -380,12 +361,7 @@ export default function Page() {
       TIME_SLOTS.forEach((slot) => {
         const count = cellCountMap[`${dateKey}__${slot.id}`] || 0;
         if (count > threshold) {
-          result.push({
-            dateKey,
-            slotId: slot.id,
-            label: slot.label,
-            count,
-          });
+          result.push({ dateKey, slotId: slot.id, label: slot.label, count });
         }
       });
     });
@@ -402,7 +378,6 @@ export default function Page() {
     if (!trimmed) return;
     setMyName(trimmed);
     setSavedMyName(trimmed);
-    setSaveMessage(`Du bearbeitest jetzt die Verfügbarkeit von ${trimmed}.`);
   }
 
   function toggleCell(dateKey: string, slotId: string): void {
@@ -413,19 +388,14 @@ export default function Page() {
 
     const next = { ...draftAvailability };
     const existing = next[dateKey] || [];
-    const updated = existing.includes(slotId)
-      ? existing.filter((s) => s !== slotId)
-      : [...existing, slotId];
+    const updated = existing.includes(slotId) ? existing.filter((s) => s !== slotId) : [...existing, slotId];
 
-    if (updated.length === 0) {
-      delete next[dateKey];
-    } else {
-      next[dateKey] = [...updated].sort();
-    }
+    if (updated.length === 0) delete next[dateKey];
+    else next[dateKey] = [...updated].sort();
 
     setDraftAvailability(normalizePersonAvailability(next));
     setIsDirty(true);
-    setSaveMessage("Die Kalenderauswahl wurde geändert. Bitte speichern.");
+    setSaveMessage("");
   }
 
   async function saveMyAvailability(): Promise<void> {
@@ -452,7 +422,6 @@ export default function Page() {
           .select("date_key")
           .eq("poll_id", pollId)
           .eq("owner_user_id", currentUserId);
-
         if (fetchMineError) throw fetchMineError;
 
         const savedDates = ((myRows || []) as Array<{ date_key: string }>).map((row) => row.date_key);
@@ -466,7 +435,6 @@ export default function Page() {
             .eq("poll_id", pollId)
             .eq("owner_user_id", currentUserId)
             .in("date_key", datesToDelete);
-
           if (deleteError) throw deleteError;
         }
 
@@ -475,16 +443,12 @@ export default function Page() {
           const { error: upsertError } = await supabase
             .from("meeting_availability")
             .upsert(rowsToUpsert, { onConflict: "poll_id,participant_name,date_key" });
-
           if (upsertError) throw upsertError;
         }
 
         await fetchAllAvailability(false);
       } else {
-        setAvailability((prev) => ({
-          ...prev,
-          [trimmedName]: normalizedDraft,
-        }));
+        setAvailability((prev) => ({ ...prev, [trimmedName]: normalizedDraft }));
       }
 
       setSavedMyName(trimmedName);
@@ -497,45 +461,6 @@ export default function Page() {
       setSaveMessage("Speichern fehlgeschlagen. Bitte Tabellenstruktur, RLS-Policy, anonyme Anmeldung und Netzwerk prüfen.");
     } finally {
       setIsSaving(false);
-    }
-  }
-
-  async function deleteParticipantAsHost(): Promise<void> {
-    if (!participantToDelete) {
-      setSaveMessage("Bitte zuerst eine teilnehmende Person auswählen.");
-      return;
-    }
-
-    const supabase = supabaseRef.current;
-
-    try {
-      if (supabase) {
-        const { error } = await supabase
-          .from("meeting_availability")
-          .delete()
-          .eq("poll_id", pollId)
-          .eq("participant_name", participantToDelete);
-
-        if (error) throw error;
-        await fetchAllAvailability(false);
-      } else {
-        setAvailability((prev) => {
-          const next = { ...prev };
-          delete next[participantToDelete];
-          return next;
-        });
-      }
-
-      if (savedMyName === participantToDelete) {
-        setDraftAvailability({});
-        setIsDirty(false);
-      }
-
-      setParticipantToDelete("");
-      setSaveMessage("Die ausgewählte teilnehmende Person wurde entfernt.");
-    } catch (error) {
-      console.error(error);
-      setSaveMessage("Das Löschen anderer Teilnehmender wurde blockiert. Dafür ist eine Host-Berechtigung im Backend oder eine angepasste RLS-Policy erforderlich.");
     }
   }
 
@@ -553,10 +478,6 @@ export default function Page() {
       next.setDate(prev.getDate() + 7);
       return next;
     });
-  }
-
-  function goToCurrentWeek(): void {
-    setWeekStart(getWeekStart(new Date()));
   }
 
   const mySavedAvailability = savedMyName ? normalizePersonAvailability(availability[savedMyName] || {}) : {};
@@ -577,7 +498,7 @@ export default function Page() {
                 <Users className="h-5 w-5" />
                 Namen eingeben
               </CardTitle>
-              <p className="text-sm text-slate-600">Bitte eigenen Namen eingeben und bestätigen, bevor Zeitfenster ausgewählt werden.</p>
+              <p className="text-sm text-slate-600">1. Namen eingeben und auf „Bestätigen“ klicken. 2. Datum und Zeitfenster auswählen. 3. Auf „Auswahl speichern“ klicken.</p>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-col gap-3 md:flex-row">
@@ -588,14 +509,6 @@ export default function Page() {
                   {isSaving ? "Wird gespeichert…" : "Auswahl speichern"}
                 </Button>
               </div>
-
-              {savedMyName ? (
-                <div className="rounded-xl bg-slate-100 p-3 text-sm text-slate-700">
-                  Aktuelle Person: <span className="font-semibold">{savedMyName}</span>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-dashed p-4 text-sm text-slate-500">Noch kein Name bestätigt.</div>
-              )}
 
               {isLoading ? (
                 <div className="rounded-xl border border-dashed p-4 text-sm text-slate-500">Daten und anonyme Anmeldung werden vorbereitet…</div>
@@ -634,14 +547,15 @@ export default function Page() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <CardTitle className="text-xl">Wochenkalender</CardTitle>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" onClick={goPrevWeek}>
+                <Button variant="outline" size="icon" onClick={goPrevWeek} aria-label="Vorherige Woche">
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <Button variant="outline" onClick={goToCurrentWeek}>Heute</Button>
-                <Button variant="outline" size="icon" onClick={goNextWeek}>
+                <div className="min-w-[220px] rounded-xl border border-slate-200 bg-white px-4 py-2 text-center text-sm font-medium">
+                  {weekRangeLabel}
+                </div>
+                <Button variant="outline" size="icon" onClick={goNextWeek} aria-label="Nächste Woche">
                   <ChevronRight className="h-4 w-4" />
                 </Button>
-                <div className="min-w-[180px] text-center font-medium">{weekRangeLabel}</div>
               </div>
             </div>
             <p className="text-sm text-slate-600">Ein Klick markiert ein Zeitfenster blau. Ein weiterer Klick entfernt die Auswahl wieder.</p>
@@ -655,10 +569,7 @@ export default function Page() {
                 const isToday = formatDateKey(day) === formatDateKey(new Date());
 
                 return (
-                  <div
-                    key={dateKey}
-                    className={`rounded-2xl border p-3 text-center ${hasOwnSelection ? "border-blue-200 bg-blue-50" : "border-slate-200 bg-white"}`}
-                  >
+                  <div key={dateKey} className={`rounded-2xl border p-3 text-center ${hasOwnSelection ? "border-blue-200 bg-blue-50" : "border-slate-200 bg-white"}`}>
                     <div className="text-xs uppercase tracking-wide text-slate-500">{WEEKDAYS[index]}</div>
                     <div className={`mt-1 text-2xl font-semibold ${hasOwnSelection ? "text-blue-700" : "text-slate-800"}`}>{day.getDate()}</div>
                     {isToday && <div className="mt-1 text-xs text-slate-500">Heute</div>}
@@ -680,13 +591,11 @@ export default function Page() {
                       <button
                         key={`${dateKey}-${slot.id}`}
                         onClick={() => toggleCell(dateKey, slot.id)}
-                        className={`min-h-[88px] rounded-2xl border p-3 text-left transition ${
-                          selected ? "border-blue-400 bg-blue-500 text-white hover:bg-blue-500" : "border-slate-200 bg-white hover:bg-slate-50"
-                        }`}
+                        className={`min-h-[88px] rounded-2xl border p-3 text-left transition ${selected ? "border-blue-400 bg-blue-500 text-white hover:bg-blue-500" : "border-slate-200 bg-white hover:bg-slate-50"}`}
                       >
                         <div className="flex h-full items-end justify-end">
                           <Badge variant="outline" className={selected ? "border-white/40 bg-white/10 text-white" : "border-slate-200 text-slate-700"}>
-                            {count}
+                            {count} / {participants.length}
                           </Badge>
                         </div>
                       </button>
@@ -729,57 +638,27 @@ export default function Page() {
           </CardContent>
         </Card>
 
-        <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
-          <Card className="rounded-2xl shadow-sm">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <Users className="h-5 w-5" />
-                Teilnehmende
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {participants.length === 0 ? (
-                <div className="rounded-xl border border-dashed p-4 text-sm text-slate-500">Noch keine Teilnehmenden vorhanden.</div>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {participants.map((name) => (
-                    <Badge key={name} variant={name === savedMyName ? "default" : "secondary"}>
-                      {name}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-2xl shadow-sm">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <Trash2 className="h-5 w-5" />
-                Host-Aktion
-              </CardTitle>
-              <p className="text-sm text-slate-600">Eine teilnehmende Person auswählen und entfernen. Dafür kann weiterhin eine Host-Berechtigung im Backend nötig sein.</p>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <select
-                value={participantToDelete}
-                onChange={(e) => setParticipantToDelete(e.target.value)}
-                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none"
-              >
-                <option value="">Teilnehmende Person auswählen</option>
+        <Card className="rounded-2xl shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <Users className="h-5 w-5" />
+              Teilnehmende
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {participants.length === 0 ? (
+              <div className="rounded-xl border border-dashed p-4 text-sm text-slate-500">Noch keine Teilnehmenden vorhanden.</div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
                 {participants.map((name) => (
-                  <option key={name} value={name}>
+                  <Badge key={name} variant={name === savedMyName ? "default" : "secondary"}>
                     {name}
-                  </option>
+                  </Badge>
                 ))}
-              </select>
-              <Button variant="destructive" className="gap-2" onClick={() => void deleteParticipantAsHost()}>
-                <Trash2 className="h-4 w-4" />
-                Person löschen
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
