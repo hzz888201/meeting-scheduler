@@ -33,7 +33,6 @@ const TIME_SLOTS = [
 ] as const;
 
 const WEEKDAYS = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
-const VIEW_TABS = ["Day", "Week", "Month", "Year"];
 const DEFAULT_POLL_ID = "team-meeting-demo";
 
 function getPollId(): string {
@@ -570,28 +569,48 @@ export default function Page() {
         )}
 
         <Card className="overflow-hidden rounded-[28px] border-slate-200 shadow-sm">
-          <CardHeader className="gap-4 border-b border-slate-100 pb-5">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                <Button variant="ghost" size="icon" className="h-10 w-10 rounded-[18px] border border-slate-200 bg-white sm:h-12 sm:w-12 sm:rounded-[22px] lg:h-14 lg:w-14" onClick={goPrevWeek} aria-label="Vorherige Woche">
-                  <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6 lg:h-7 lg:w-7" />
+          <CardHeader className="gap-3 border-b border-slate-100 pb-4 sm:gap-4 sm:pb-5">
+            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3 lg:justify-between">
+              <div className="flex w-full flex-wrap items-center justify-center gap-2 sm:gap-3 lg:w-auto lg:justify-start">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 rounded-[16px] border border-slate-200 bg-white sm:h-11 sm:w-11 sm:rounded-[18px] lg:h-14 lg:w-14 lg:rounded-[22px]"
+                  onClick={goPrevWeek}
+                  aria-label="Vorherige Woche"
+                >
+                  <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5 lg:h-7 lg:w-7" />
                 </Button>
-                <div className="min-w-[160px] flex-1 rounded-[18px] border border-slate-200 bg-white px-3 py-2 text-center text-lg font-semibold text-slate-900 sm:min-w-[260px] sm:flex-none sm:rounded-[20px] sm:px-5 sm:py-3 sm:text-2xl lg:min-w-[420px] lg:rounded-[24px] lg:px-6 lg:py-4 lg:text-3xl">
+
+                <div className="min-w-[150px] flex-1 rounded-[16px] border border-slate-200 bg-white px-3 py-2 text-center text-base font-semibold text-slate-900 sm:min-w-[240px] sm:flex-none sm:rounded-[18px] sm:px-4 sm:py-2.5 sm:text-xl lg:min-w-[420px] lg:rounded-[24px] lg:px-6 lg:py-4 lg:text-3xl">
                   {weekRangeLabel}
                 </div>
-                <Button variant="ghost" size="icon" className="h-10 w-10 rounded-[18px] border border-slate-200 bg-white sm:h-12 sm:w-12 sm:rounded-[22px] lg:h-14 lg:w-14" onClick={goNextWeek} aria-label="Nächste Woche">
-                  <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6 lg:h-7 lg:w-7" />
+
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 rounded-[16px] border border-slate-200 bg-white sm:h-11 sm:w-11 sm:rounded-[18px] lg:h-14 lg:w-14 lg:rounded-[22px]"
+                  onClick={goNextWeek}
+                  aria-label="Nächste Woche"
+                >
+                  <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5 lg:h-7 lg:w-7" />
                 </Button>
-                <Button variant="outline" className="h-10 rounded-[18px] border-2 border-green-500 px-3 text-sm font-semibold text-green-600 hover:bg-green-50 sm:h-12 sm:rounded-[20px] sm:px-5 sm:text-base lg:h-14 lg:rounded-[22px] lg:px-6 lg:text-lg" onClick={goToCurrentWeek}>
+
+                <Button
+                  variant="outline"
+                  className="h-9 rounded-[16px] border-2 border-green-500 px-3 text-xs font-semibold text-green-600 hover:bg-green-50 sm:h-11 sm:rounded-[18px] sm:px-4 sm:text-sm lg:h-14 lg:rounded-[22px] lg:px-6 lg:text-lg"
+                  onClick={goToCurrentWeek}
+                >
                   Today
                 </Button>
               </div>
-            <p className="text-sm text-slate-600">Ein Klick markiert ein Zeitfenster. Ein weiterer Klick entfernt die Auswahl wieder.</p>
+            </div>
+            <p className="text-xs text-slate-600 sm:text-sm">Ein Klick markiert ein Zeitfenster. Ein weiterer Klick entfernt die Auswahl wieder.</p>
           </CardHeader>
 
           <CardContent className="p-2 sm:p-3 lg:p-5">
             <div className="w-full">
-              <div className="grid w-full grid-cols-[68px_repeat(7,minmax(0,1fr))] gap-1 sm:grid-cols-[82px_repeat(7,minmax(0,1fr))] sm:gap-1.5 lg:grid-cols-[110px_repeat(7,minmax(0,1fr))] lg:gap-3">
+              <div className="grid w-full grid-cols-[64px_repeat(7,minmax(0,1fr))] gap-1 sm:grid-cols-[78px_repeat(7,minmax(0,1fr))] sm:gap-1.5 md:grid-cols-[88px_repeat(7,minmax(0,1fr))] lg:grid-cols-[110px_repeat(7,minmax(0,1fr))] lg:gap-3">
                 <div />
                 {weekDays.map((day, index) => {
                   const dateKey = formatDateKey(day);
@@ -609,7 +628,7 @@ export default function Page() {
 
                 {TIME_SLOTS.map((slot) => (
                   <React.Fragment key={slot.id}>
-                    <div className="flex items-start rounded-[16px] sm:rounded-[20px] lg:rounded-[28px] border border-slate-200 bg-white px-1.5 py-2 text-[10px] font-medium text-slate-700 sm:px-2.5 sm:py-3 sm:text-xs lg:px-4 lg:py-6 lg:text-2xl">
+                    <div className="flex items-start rounded-[16px] sm:rounded-[20px] lg:rounded-[28px] border border-slate-200 bg-white px-1.5 py-2 text-[10px] font-medium leading-tight text-slate-700 sm:px-2.5 sm:py-3 sm:text-xs md:text-sm lg:px-4 lg:py-6 lg:text-xl xl:text-2xl">
                       {slot.label}
                     </div>
                     {weekDays.map((day) => {
@@ -623,7 +642,7 @@ export default function Page() {
                         <button
                           key={`${dateKey}-${slot.id}`}
                           onClick={() => toggleCell(dateKey, slot.id)}
-                          className={`relative min-h-[54px] rounded-[16px] px-1 py-1 text-left transition sm:min-h-[72px] sm:rounded-[20px] sm:px-1.5 sm:py-1.5 lg:min-h-[112px] lg:rounded-[28px] lg:px-4 lg:py-4 ${
+                          className={`relative min-h-[52px] rounded-[14px] px-1 py-1 text-left transition sm:min-h-[68px] sm:rounded-[18px] sm:px-1.5 sm:py-1.5 md:min-h-[82px] md:rounded-[20px] lg:min-h-[112px] lg:rounded-[28px] lg:px-4 lg:py-4 ${
                             selected
                               ? isTopThree
                                 ? "border-4 border-blue-500 bg-green-600 text-white"
@@ -641,7 +660,7 @@ export default function Page() {
                             {(hasAnySelection || selected) ? (
                               <Badge
                                 variant="outline"
-                                className={`max-w-full whitespace-nowrap px-1 py-0 text-[10px] font-semibold sm:px-1.5 sm:py-0.5 sm:text-xs lg:px-2 lg:py-1 lg:text-base ${
+                                className={`max-w-full whitespace-nowrap px-1 py-0 text-[9px] font-semibold leading-none sm:px-1.5 sm:py-0.5 sm:text-[11px] md:px-2 md:py-0.5 md:text-xs lg:px-2.5 lg:py-1 lg:text-sm xl:text-base ${
                                   isTopThree ? "border-white/40 bg-white/10 text-white" : "border-slate-200 text-slate-700"
                                 }`}
                               >
