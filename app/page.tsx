@@ -488,19 +488,27 @@ export default function Page() {
         <div className="rounded-2xl border bg-white p-6 shadow-sm">
           <div className="text-3xl font-bold text-slate-900">Terminabstimmung</div>
           <div className="mt-2 text-base text-slate-600 sm:text-lg">Weiterentwicklung des KS-Schallschutzrechners</div>
-          <div className="mt-4 rounded-3xl border border-blue-200 bg-blue-50/80 p-5 text-sm leading-7 text-slate-700 shadow-sm sm:p-6 sm:text-base">
+          <div className="mt-4 rounded-3xl border border-blue-200 bg-blue-50/90 p-5 text-sm leading-7 text-slate-700 shadow-sm sm:p-6 sm:text-base">
             <div className="font-semibold text-slate-900">Kurzanleitung</div>
-            <div className="mt-2">Bitte geben Sie Ihren Namen ein und bestätigen Sie diesen.</div>
-            <div>Wählen Sie anschließend passende Zeitfenster in Ihrem Kalender aus und speichern Sie danach Ihre Auswahl.</div>
-            <div className="mt-3"><span className="font-medium text-slate-900">Kalenderansicht:</span> Klicken Sie auf einen Teilnehmendennamen, um dessen Auswahl anzuzeigen. Der gemeinsame Kalender zeigt alle gewählten Zeitfenster.</div>
-            <div className="mt-2">Einmal klicken: Zeitfenster markieren. Noch einmal klicken: Markierung entfernen.</div>
-            <div className="mt-3 grid gap-1 sm:grid-cols-2">
-              <div><span className="font-medium text-slate-900">Weiß:</span> noch nicht gewählt</div>
-              <div><span className="font-medium text-slate-900">Hellgrün:</span> von anderen gewählt</div>
-              <div><span className="font-medium text-slate-900">Dunkelgrün:</span> Top-3-Zeiten</div>
-              <div><span className="font-medium text-slate-900">Blauer Rand:</span> Ihre Auswahl</div>
+            <div className="mt-2">1. Bitte geben Sie Ihren Namen ein und bestätigen Sie diesen.</div>
+            <div>2. Wählen Sie anschließend passende Zeitfenster in Ihrem Kalender aus und speichern Sie danach Ihre Auswahl.</div>
+            <div>3. Fertig.</div>
+            <div className="mt-3 rounded-2xl bg-white/70 px-4 py-3">
+              <span className="font-medium text-slate-900">Kalenderansicht:</span> Klicken Sie auf einen Teilnehmendennamen, um dessen Auswahl anzuzeigen. Der gemeinsame Kalender zeigt alle gewählten Zeitfenster.
             </div>
-            <div className="mt-3"><span className="font-medium text-slate-900">Angezeigt werden:</span> Zeitfenster mit Mehrheitszustimmung, absteigend sortiert.</div>
+            <div className="mt-3 rounded-2xl bg-white/70 px-4 py-3">
+              <div className="font-medium text-slate-900">Bedienung im Kalender</div>
+              <div className="mt-1">Einmal klicken: Zeitfenster markieren. Noch einmal klicken: Markierung entfernen.</div>
+              <div className="mt-2 grid gap-1 sm:grid-cols-2">
+                <div><span className="font-medium text-slate-900">Weiß:</span> noch nicht gewählt</div>
+                <div><span className="font-medium text-slate-900">Hellgrün:</span> von anderen gewählt</div>
+                <div><span className="font-medium text-slate-900">Dunkelgrün:</span> Top-3-Zeiten</div>
+                <div><span className="font-medium text-slate-900">Blauer Rand:</span> Ihre Auswahl</div>
+              </div>
+            </div>
+            <div className="mt-3 rounded-2xl bg-white/70 px-4 py-3">
+              <span className="font-medium text-slate-900">Angezeigt werden:</span> Zeitfenster mit Mehrheitszustimmung, absteigend sortiert.
+            </div>
           </div>
         </div>
 
@@ -519,7 +527,7 @@ export default function Page() {
 
             <div className="space-y-3">
               <div className="text-sm font-medium text-slate-700">Kalenderansicht</div>
-              <div className="text-sm text-slate-500">Klicken Sie auf einen Teilnehmendennamen, um nur dessen ausgewählte Zeitfenster zu sehen.</div>
+              <div className="text-sm text-slate-500">Klicken Sie auf einen Teilnehmendennamen, um dessen Auswahl anzuzeigen.</div>
               <div className="flex flex-wrap gap-2">
                 <Badge variant={activeCalendarView === "all" ? "default" : "secondary"} className="cursor-pointer px-3 py-1.5" onClick={() => setActiveCalendarView("all")}>
                   Gemeinsamer Kalender
@@ -580,7 +588,7 @@ export default function Page() {
               </Button>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <p className="text-xs text-slate-600 sm:text-sm">Ein Klick markiert ein Zeitfenster. Ein weiterer Klick entfernt die Auswahl wieder.</p>
+              <p className="rounded-2xl bg-slate-50 px-4 py-3 text-xs leading-6 text-slate-700 sm:text-sm">Einmal klicken: Zeitfenster markieren. Noch einmal klicken: Markierung entfernen. • Weiß: noch nicht gewählt • Hellgrün: von anderen gewählt • Dunkelgrün: Top-3-Zeiten • Blauer Rand: Ihre Auswahl</p>
               <div className="text-sm font-medium text-slate-700">{calendarTitle}</div>
             </div>
           </CardHeader>
@@ -665,7 +673,7 @@ export default function Page() {
               <CheckCircle2 className="h-5 w-5" />
               Zeitfenster mit Mehrheit
             </CardTitle>
-            <p className="text-sm text-slate-600">Angezeigt werden alle Zeitfenster, die von mehr als der Hälfte der Teilnehmenden gewählt wurden – sortiert von den meisten zu den wenigsten Stimmen.</p>
+            <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">Angezeigt werden: Zeitfenster mit Mehrheitszustimmung, absteigend sortiert。</p>
           </CardHeader>
           <CardContent>
             {activeCalendarView !== "all" ? (
