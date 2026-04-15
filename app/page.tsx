@@ -515,7 +515,7 @@ export default function Page() {
 
   const mySavedAvailability = savedMyName ? normalizePersonAvailability(availability[savedMyName] || {}) : {};
   const hasServerDiff = savedMyName ? !arePersonAvailabilityEqual(mySavedAvailability, draftAvailability) : false;
-  const calendarTitle = activeCalendarView === "all" ? "Gemeinsamer Kalender" : `${activeCalendarView}的选择`;
+  const calendarTitle = activeCalendarView === "all" ? "Gemeinsamer Kalender" : `${activeCalendarView}s Auswahl`;
 
   return (
     <div className="min-h-screen bg-[#f6f7f4] p-3 sm:p-4 lg:p-6">
@@ -541,6 +541,29 @@ export default function Page() {
               <Button onClick={registerMe} className="h-11 rounded-xl">Bestätigen</Button>
             </div>
 
+            <div className="space-y-3">
+              <div className="text-sm font-medium text-slate-700">Kalenderansicht</div>
+              <div className="flex flex-wrap gap-2">
+                <Badge
+                  variant={activeCalendarView === "all" ? "default" : "secondary"}
+                  className="cursor-pointer px-3 py-1.5"
+                  onClick={() => setActiveCalendarView("all")}
+                >
+                  共同日历
+                </Badge>
+                {participants.map((name) => (
+                  <Badge
+                    key={name}
+                    variant={activeCalendarView === name ? "default" : "secondary"}
+                    className="cursor-pointer px-3 py-1.5"
+                    onClick={() => setActiveCalendarView(name)}
+                  >
+                    {name}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+
             {isLoading ? (
               <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">Daten und anonyme Anmeldung werden vorbereitet…</div>
             ) : supabaseRef.current && !authReady ? (
@@ -554,36 +577,6 @@ export default function Page() {
             )}
 
             {saveMessage && <div className="rounded-2xl bg-slate-100 p-4 text-sm text-slate-600">{saveMessage}</div>}
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-2xl shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-xl">
-              <Users className="h-5 w-5" />
-              Teilnehmende
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant={activeCalendarView === "all" ? "default" : "outline"}
-                className="rounded-xl"
-                onClick={() => setActiveCalendarView("all")}
-              >
-                共同日历
-              </Button>
-              {participants.map((name) => (
-                <Button
-                  key={name}
-                  variant={activeCalendarView === name ? "default" : "outline"}
-                  className="rounded-xl"
-                  onClick={() => setActiveCalendarView(name)}
-                >
-                  {name}
-                </Button>
-              ))}
-            </div>
           </CardContent>
         </Card>
 
@@ -723,61 +716,7 @@ export default function Page() {
         </Card>
 
         <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-          <Card className="rounded-[28px] border-slate-200 shadow-sm">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-                <CheckCircle2 className="h-5 w-5" />
-                Zeitfenster mit Mehrheit
-              </CardTitle>
-              <p className="text-sm text-slate-600">Angezeigt werden alle Zeitfenster, die von mehr als der Hälfte der Teilnehmenden gewählt wurden – sortiert von den meisten zu den wenigsten Stimmen.</p>
-            </CardHeader>
-            <CardContent>
-              {participants.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">Noch keine gespeicherten Teilnehmenden vorhanden.</div>
-              ) : majoritySlots.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">Für diese Woche liegt derzeit kein Zeitfenster mit Mehrheit vor.</div>
-              ) : (
-                <div className="space-y-3">
-                  {majoritySlots.map((item) => (
-                    <motion.div key={`${item.dateKey}-${item.slotId}`} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border bg-slate-50 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <div className="font-medium">{formatDateDE(item.dateKey)}</div>
-                          <div className="mt-1 text-sm text-slate-600">{item.label}</div>
-                        </div>
-                        <Badge>{item.count} / {participants.length}</Badge>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-[28px] border-slate-200 shadow-sm">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-                <Users className="h-5 w-5" />
-                Teilnehmende
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                <Badge variant={activeCalendarView === "all" ? "default" : "secondary"} className="cursor-pointer px-3 py-1.5" onClick={() => setActiveCalendarView("all")}>共同日历</Badge>
-                {participants.map((name) => (
-                  <Badge
-                    key={name}
-                    variant={activeCalendarView === name ? "default" : "secondary"}
-                    className="cursor-pointer px-3 py-1.5"
-                    onClick={() => setActiveCalendarView(name)}
-                  >
-                    {name}
-                  </Badge>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+          
       </div>
     </div>
   );
