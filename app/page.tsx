@@ -583,20 +583,6 @@ export default function Page() {
                 <div className="text-2xl font-bold tracking-tight text-slate-900 sm:text-4xl">{weekRangeLabel}</div>
               </div>
             </div>
-
-            <div className="flex w-full flex-wrap items-center gap-2 rounded-2xl border border-green-100 bg-white p-2 sm:w-fit">
-              {VIEW_TABS.map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  className={`min-w-[90px] rounded-2xl px-5 py-3 text-center text-xl font-medium transition ${
-                    tab === "Week" ? "bg-green-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
-                  }`}
-                >
-                  {tab}
-                </button>
-              ))}
-            </div>
           </CardHeader>
 
           <CardContent className="p-0">
