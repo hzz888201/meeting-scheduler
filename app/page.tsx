@@ -30,7 +30,8 @@ const TIME_SLOTS = [
   { id: "18:00-20:00", label: "18:00–20:00" },
 ] as const;
 
-const WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+const WEEKDAYS = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+const VIEW_TABS = ["Day", "Week", "Month", "Year"];
 const DEFAULT_POLL_ID = "team-meeting-demo";
 
 function getPollId(): string {
@@ -126,7 +127,7 @@ function arePersonAvailabilityEqual(a: PersonAvailability, b: PersonAvailability
 function getWeekStart(date: Date): Date {
   const copy = new Date(date);
   const day = copy.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
+  const diff = -day;
   copy.setDate(copy.getDate() + diff);
   copy.setHours(0, 0, 0, 0);
   return copy;
@@ -143,19 +144,16 @@ function getWeekDays(weekStart: Date): Date[] {
 function formatWeekRange(weekStart: Date): string {
   const end = new Date(weekStart);
   end.setDate(weekStart.getDate() + 6);
-  const sameMonth = weekStart.getMonth() === end.getMonth() && weekStart.getFullYear() === end.getFullYear();
-  const startDay = weekStart.getDate();
-  const endDay = end.getDate();
 
-  if (sameMonth) {
-    return `${startDay}.–${endDay}. ${weekStart.toLocaleDateString("de-DE", { month: "long", year: "numeric" })}`;
+  const startMonth = weekStart.toLocaleDateString("en-US", { month: "long" });
+  const endMonth = end.toLocaleDateString("en-US", { month: "long" });
+  const year = end.getFullYear();
+
+  if (weekStart.getMonth() === end.getMonth() && weekStart.getFullYear() === end.getFullYear()) {
+    return `${startMonth} ${weekStart.getDate()} – ${end.getDate()}, ${year}`;
   }
 
-  return `${weekStart.toLocaleDateString("de-DE", { day: "numeric", month: "short" })} – ${end.toLocaleDateString("de-DE", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  })}`;
+  return `${startMonth} ${weekStart.getDate()} – ${endMonth} ${end.getDate()}, ${year}`;
 }
 
 export default function Page() {
@@ -349,6 +347,28 @@ export default function Page() {
     return map;
   }, [availability]);
 
+  const topThreeCellKeys = useMemo(() => {
+    const ranked = weekDays
+      .flatMap((day) => {
+        const dateKey = formatDateKey(day);
+        return TIME_SLOTS.map((slot) => ({
+          key: `${dateKey}__${slot.id}`,
+          dateKey,
+          slotId: slot.id,
+          count: cellCountMap[`${dateKey}__${slot.id}`] || 0,
+        }));
+      })
+      .filter((item) => item.count > 0)
+      .sort((a, b) => {
+        if (b.count !== a.count) return b.count - a.count;
+        if (a.dateKey !== b.dateKey) return a.dateKey.localeCompare(b.dateKey);
+        return a.slotId.localeCompare(b.slotId);
+      })
+      .slice(0, 3);
+
+    return new Set(ranked.map((item) => item.key));
+  }, [cellCountMap, weekDays]);
+
   const majoritySlots = useMemo(() => {
     const totalParticipants = participants.length;
     if (totalParticipants === 0) return [] as Array<{ dateKey: string; slotId: string; label: string; count: number }>;
@@ -372,28 +392,6 @@ export default function Page() {
       return a.slotId.localeCompare(b.slotId);
     });
   }, [cellCountMap, participants.length, weekDays]);
-
-  const topThreeCellKeys = useMemo(() => {
-    const ranked = weekDays
-      .flatMap((day) => {
-        const dateKey = formatDateKey(day);
-        return TIME_SLOTS.map((slot) => ({
-          key: `${dateKey}__${slot.id}`,
-          dateKey,
-          slotId: slot.id,
-          count: cellCountMap[`${dateKey}__${slot.id}`] || 0,
-        }));
-      })
-      .filter((item) => item.count > 0)
-      .sort((a, b) => {
-        if (b.count !== a.count) return b.count - a.count;
-        if (a.dateKey !== b.dateKey) return a.dateKey.localeCompare(b.dateKey);
-        return a.slotId.localeCompare(b.slotId);
-      })
-      .slice(0, 3);
-
-    return new Set(ranked.map((item) => item.key));
-  }, [cellCountMap, weekDays]);
 
   function registerMe(): void {
     const trimmed = participantNameInput.trim();
@@ -502,204 +500,220 @@ export default function Page() {
     });
   }
 
+  function goToCurrentWeek(): void {
+    setWeekStart(getWeekStart(new Date()));
+  }
+
   const mySavedAvailability = savedMyName ? normalizePersonAvailability(availability[savedMyName] || {}) : {};
   const hasServerDiff = savedMyName ? !arePersonAvailabilityEqual(mySavedAvailability, draftAvailability) : false;
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-8">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <div className="rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="text-3xl font-bold text-slate-900">Terminvereinbarer</div>
-          <div className="mt-2 text-lg text-slate-700">Meeting: Weiterentwicklung KS-Schallschutzrechners</div>
-        </div>
-
-        <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
-          <Card className="rounded-2xl shadow-sm">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <Users className="h-5 w-5" />
-                Namen eingeben
-              </CardTitle>
-              <p className="text-sm text-slate-600">1. Namen eingeben und auf „Bestätigen“ klicken. 2. Datum und Zeitfenster auswählen. 3. Auf „Auswahl speichern“ klicken.</p>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-col gap-3 md:flex-row">
-                <Input value={participantNameInput} onChange={(e) => setParticipantNameInput(e.target.value)} placeholder="Deinen Namen eingeben" onKeyDown={(e) => e.key === "Enter" && registerMe()} />
-                <Button onClick={registerMe}>Bestätigen</Button>
-                <Button className="gap-2" onClick={() => void saveMyAvailability()} disabled={isSaving || !savedMyName || !isDirty}>
-                  <Save className="h-4 w-4" />
-                  {isSaving ? "Wird gespeichert…" : "Auswahl speichern"}
-                </Button>
-              </div>
-
-              {isLoading ? (
-                <div className="rounded-xl border border-dashed p-4 text-sm text-slate-500">Daten und anonyme Anmeldung werden vorbereitet…</div>
-              ) : supabaseRef.current && !authReady ? (
-                <div className="rounded-xl border border-dashed p-4 text-sm text-amber-700">
-                  {authError || "Die anonyme Anmeldung ist noch nicht bereit. Bitte Supabase Auth prüfen und die Seite neu laden."}
-                </div>
-              ) : null}
-
-              {hasServerDiff && !isDirty && (
-                <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800">Der lokale Entwurf weicht von den Serverdaten ab. Bitte erneut auswählen und speichern.</div>
-              )}
-
-              {saveMessage && <div className="rounded-xl bg-slate-100 p-3 text-sm text-slate-600">{saveMessage}</div>}
-            </CardContent>
-          </Card>
-
-          <div className="flex items-start justify-end">
-            <Button variant="outline" className="gap-2" onClick={() => void fetchAllAvailability(true)} disabled={isRefreshing || isLoading}>
+    <div className="min-h-screen bg-[#f6f7f4] p-3 sm:p-4 lg:p-6">
+      <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-4 lg:gap-6">
+        <div className="rounded-[28px] border border-slate-200 bg-white px-5 py-5 shadow-sm sm:px-6 sm:py-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">Terminvereinbarer</div>
+              <div className="mt-2 text-base text-slate-600 sm:text-lg">Meeting: Weiterentwicklung KS-Schallschutzrechners</div>
+            </div>
+            <Button variant="outline" className="w-full gap-2 sm:w-auto" onClick={() => void fetchAllAvailability(true)} disabled={isRefreshing || isLoading}>
               <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
               {isRefreshing ? "Wird aktualisiert…" : "Aktualisieren"}
             </Button>
           </div>
         </div>
 
+        <Card className="rounded-[28px] border-slate-200 shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+              <Users className="h-5 w-5" />
+              Namen eingeben
+            </CardTitle>
+            <p className="text-sm leading-6 text-slate-600">1. Namen eingeben und auf „Bestätigen“ klicken. 2. Datum und Zeitfenster auswählen. 3. Auf „Auswahl speichern“ klicken.</p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-col gap-3 xl:flex-row">
+              <Input value={participantNameInput} onChange={(e) => setParticipantNameInput(e.target.value)} placeholder="Deinen Namen eingeben" onKeyDown={(e) => e.key === "Enter" && registerMe()} className="h-11 rounded-xl" />
+              <div className="flex flex-col gap-3 sm:flex-row xl:w-auto">
+                <Button onClick={registerMe} className="h-11 rounded-xl">Bestätigen</Button>
+                <Button className="h-11 gap-2 rounded-xl" onClick={() => void saveMyAvailability()} disabled={isSaving || !savedMyName || !isDirty}>
+                  <Save className="h-4 w-4" />
+                  {isSaving ? "Wird gespeichert…" : "Auswahl speichern"}
+                </Button>
+              </div>
+            </div>
+
+            {isLoading ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">Daten und anonyme Anmeldung werden vorbereitet…</div>
+            ) : supabaseRef.current && !authReady ? (
+              <div className="rounded-2xl border border-dashed border-amber-300 p-4 text-sm text-amber-700">
+                {authError || "Die anonyme Anmeldung ist noch nicht bereit. Bitte Supabase Auth prüfen und die Seite neu laden."}
+              </div>
+            ) : null}
+
+            {hasServerDiff && !isDirty && (
+              <div className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-800">Der lokale Entwurf weicht von den Serverdaten ab. Bitte erneut auswählen und speichern.</div>
+            )}
+
+            {saveMessage && <div className="rounded-2xl bg-slate-100 p-4 text-sm text-slate-600">{saveMessage}</div>}
+          </CardContent>
+        </Card>
+
         {!supabaseRef.current && (
-          <Alert className="rounded-2xl border-amber-200 bg-amber-50">
+          <Alert className="rounded-[28px] border-amber-200 bg-amber-50">
             <AlertDescription className="text-sm leading-6 text-amber-900">
               NEXT_PUBLIC_SUPABASE_URL und NEXT_PUBLIC_SUPABASE_ANON_KEY sind noch nicht gesetzt. Die Seite läuft nur im lokalen Demo-Modus.
             </AlertDescription>
           </Alert>
         )}
 
-        <Card className="rounded-2xl shadow-sm">
-          <CardHeader>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <CardTitle className="text-xl">Wochenkalender</CardTitle>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" onClick={goPrevWeek} aria-label="Vorherige Woche">
-                  <ChevronLeft className="h-4 w-4" />
+        <Card className="overflow-hidden rounded-[28px] border-slate-200 shadow-sm">
+          <CardHeader className="gap-4 border-b border-slate-100 pb-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-wrap items-center gap-3">
+                <Button variant="outline" className="h-12 rounded-2xl border-2 border-green-500 px-6 text-lg font-semibold text-green-600 hover:bg-green-50" onClick={goToCurrentWeek}>
+                  Today
                 </Button>
-                <div className="min-w-[220px] rounded-xl border border-slate-200 bg-white px-4 py-2 text-center text-sm font-medium">
-                  {weekRangeLabel}
-                </div>
-                <Button variant="outline" size="icon" onClick={goNextWeek} aria-label="Nächste Woche">
-                  <ChevronRight className="h-4 w-4" />
+                <Button variant="ghost" size="icon" className="h-12 w-12 rounded-2xl" onClick={goPrevWeek} aria-label="Vorherige Woche">
+                  <ChevronLeft className="h-7 w-7" />
                 </Button>
+                <Button variant="ghost" size="icon" className="h-12 w-12 rounded-2xl" onClick={goNextWeek} aria-label="Nächste Woche">
+                  <ChevronRight className="h-7 w-7" />
+                </Button>
+                <div className="text-2xl font-bold tracking-tight text-slate-900 sm:text-4xl">{weekRangeLabel}</div>
               </div>
             </div>
-            <p className="text-sm text-slate-600">Ein Klick markiert ein Zeitfenster blau. Ein weiterer Klick entfernt die Auswahl wieder.</p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-[110px_repeat(7,minmax(0,1fr))] gap-2">
-              <div />
-              {weekDays.map((day, index) => {
-                const dateKey = formatDateKey(day);
-                const hasOwnSelection = Boolean((draftAvailability[dateKey] || []).length);
-                const isToday = formatDateKey(day) === formatDateKey(new Date());
 
-                return (
-                  <div key={dateKey} className={`rounded-2xl border p-3 text-center ${hasOwnSelection ? "border-blue-200 bg-blue-50" : "border-slate-200 bg-white"}`}>
-                    <div className="text-xs uppercase tracking-wide text-slate-500">{WEEKDAYS[index]}</div>
-                    <div className={`mt-1 text-2xl font-semibold ${hasOwnSelection ? "text-blue-700" : "text-slate-800"}`}>{day.getDate()}</div>
-                    {isToday && <div className="mt-1 text-xs text-slate-500">Heute</div>}
-                  </div>
-                );
-              })}
-
-              {TIME_SLOTS.map((slot) => (
-                <React.Fragment key={slot.id}>
-                  <div className="flex items-center rounded-2xl border border-slate-200 bg-white px-3 py-4 text-sm font-medium text-slate-700">
-                    {slot.label}
-                  </div>
-                  {weekDays.map((day) => {
-                    const dateKey = formatDateKey(day);
-                    const selected = (draftAvailability[dateKey] || []).includes(slot.id);
-                    const count = cellCountMap[`${dateKey}__${slot.id}`] || 0;
-                    const hasAnySelection = count > 0;
-                    const isTopThree = topThreeCellKeys.has(`${dateKey}__${slot.id}`);
-
-                    return (
-                      <button
-                        key={`${dateKey}-${slot.id}`}
-                        onClick={() => toggleCell(dateKey, slot.id)}
-                        className={`min-h-[88px] rounded-2xl border p-3 text-left transition ${
-                          isTopThree
-                            ? "border-green-400 bg-green-500 text-white hover:bg-green-500"
-                            : selected
-                              ? "border-blue-400 bg-blue-500 text-white hover:bg-blue-500"
-                              : "border-slate-200 bg-white hover:bg-slate-50"
-                        }`}
-                      >
-                        <div className="flex h-full items-end justify-end">
-                          {hasAnySelection ? (
-                            <Badge
-                              variant="outline"
-                              className={
-                                isTopThree
-                                  ? "border-white/40 bg-white/10 text-white"
-                                  : selected
-                                    ? "border-white/40 bg-white/10 text-white"
-                                    : "border-slate-200 text-slate-700"
-                              }
-                            >
-                              {count} / {participants.length}
-                            </Badge>
-                          ) : null}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </React.Fragment>
+            <div className="flex w-full flex-wrap items-center gap-2 rounded-2xl border border-green-100 bg-white p-2 sm:w-fit">
+              {VIEW_TABS.map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  className={`min-w-[90px] rounded-2xl px-5 py-3 text-center text-xl font-medium transition ${
+                    tab === "Week" ? "bg-green-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  {tab}
+                </button>
               ))}
             </div>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-2xl shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-xl">
-              <CheckCircle2 className="h-5 w-5" />
-              Zeitfenster mit Mehrheit
-            </CardTitle>
-            <p className="text-sm text-slate-600">Angezeigt werden alle Zeitfenster, die von mehr als der Hälfte der Teilnehmenden gewählt wurden – sortiert von den meisten zu den wenigsten Stimmen.</p>
           </CardHeader>
-          <CardContent>
-            {participants.length === 0 ? (
-              <div className="rounded-xl border border-dashed p-4 text-sm text-slate-500">Noch keine gespeicherten Teilnehmenden vorhanden.</div>
-            ) : majoritySlots.length === 0 ? (
-              <div className="rounded-xl border border-dashed p-4 text-sm text-slate-500">Für diese Woche liegt derzeit kein Zeitfenster mit Mehrheit vor.</div>
-            ) : (
-              <div className="space-y-3">
-                {majoritySlots.map((item) => (
-                  <motion.div key={`${item.dateKey}-${item.slotId}`} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="rounded-xl border bg-slate-50 p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="font-medium">{formatDateDE(item.dateKey)}</div>
-                        <div className="mt-1 text-sm text-slate-600">{item.label}</div>
+
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <div className="min-w-[980px] lg:min-w-0">
+                <div className="grid grid-cols-[110px_repeat(7,minmax(0,1fr))] gap-0 border-t border-slate-100">
+                  <div className="border-r border-slate-100 bg-white" />
+                  {weekDays.map((day, index) => {
+                    const dateKey = formatDateKey(day);
+                    const hasOwnSelection = Boolean((draftAvailability[dateKey] || []).length);
+                    const isToday = formatDateKey(day) === formatDateKey(new Date());
+
+                    return (
+                      <div key={dateKey} className="border-r border-slate-100 bg-white px-3 py-4 text-center">
+                        <div className="text-sm uppercase tracking-wide text-slate-500">{WEEKDAYS[index]}</div>
+                        <div className={`mt-1 text-4xl font-semibold ${hasOwnSelection ? "text-blue-700" : "text-slate-800"}`}>{day.getDate()}</div>
+                        {isToday && <div className="mt-1 text-xs text-slate-500">Heute</div>}
                       </div>
-                      <Badge>{item.count} / {participants.length}</Badge>
-                    </div>
-                  </motion.div>
-                ))}
+                    );
+                  })}
+
+                  {TIME_SLOTS.map((slot) => (
+                    <React.Fragment key={slot.id}>
+                      <div className="flex items-center border-r border-t border-slate-100 bg-white px-3 py-5 text-sm font-medium text-slate-700">
+                        {slot.label}
+                      </div>
+                      {weekDays.map((day) => {
+                        const dateKey = formatDateKey(day);
+                        const selected = (draftAvailability[dateKey] || []).includes(slot.id);
+                        const count = cellCountMap[`${dateKey}__${slot.id}`] || 0;
+                        const hasAnySelection = count > 0;
+                        const isTopThree = topThreeCellKeys.has(`${dateKey}__${slot.id}`);
+
+                        return (
+                          <button
+                            key={`${dateKey}-${slot.id}`}
+                            onClick={() => toggleCell(dateKey, slot.id)}
+                            className={`relative min-h-[96px] border-r border-t border-slate-100 px-3 py-3 transition ${
+                              isTopThree
+                                ? "bg-green-500 text-white hover:bg-green-500"
+                                : selected
+                                  ? "bg-blue-500 text-white hover:bg-blue-500"
+                                  : "bg-white hover:bg-slate-50"
+                            }`}
+                          >
+                            <div className="flex h-full items-end justify-end">
+                              {hasAnySelection ? (
+                                <Badge variant="outline" className={isTopThree || selected ? "border-white/40 bg-white/10 text-white" : "border-slate-200 text-slate-700"}>
+                                  {count} / {participants.length}
+                                </Badge>
+                              ) : null}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </React.Fragment>
+                  ))}
+                </div>
               </div>
-            )}
+            </div>
           </CardContent>
         </Card>
 
-        <Card className="rounded-2xl shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-xl">
-              <Users className="h-5 w-5" />
-              Teilnehmende
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {participants.length === 0 ? (
-              <div className="rounded-xl border border-dashed p-4 text-sm text-slate-500">Noch keine Teilnehmenden vorhanden.</div>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {participants.map((name) => (
-                  <Badge key={name} variant={name === savedMyName ? "default" : "secondary"}>
-                    {name}
-                  </Badge>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+          <Card className="rounded-[28px] border-slate-200 shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+                <CheckCircle2 className="h-5 w-5" />
+                Zeitfenster mit Mehrheit
+              </CardTitle>
+              <p className="text-sm text-slate-600">Angezeigt werden alle Zeitfenster, die von mehr als der Hälfte der Teilnehmenden gewählt wurden – sortiert von den meisten zu den wenigsten Stimmen.</p>
+            </CardHeader>
+            <CardContent>
+              {participants.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">Noch keine gespeicherten Teilnehmenden vorhanden.</div>
+              ) : majoritySlots.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">Für diese Woche liegt derzeit kein Zeitfenster mit Mehrheit vor.</div>
+              ) : (
+                <div className="space-y-3">
+                  {majoritySlots.map((item) => (
+                    <motion.div key={`${item.dateKey}-${item.slotId}`} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl border bg-slate-50 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="font-medium">{formatDateDE(item.dateKey)}</div>
+                          <div className="mt-1 text-sm text-slate-600">{item.label}</div>
+                        </div>
+                        <Badge>{item.count} / {participants.length}</Badge>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-[28px] border-slate-200 shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+                <Users className="h-5 w-5" />
+                Teilnehmende
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {participants.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">Noch keine Teilnehmenden vorhanden.</div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {participants.map((name) => (
+                    <Badge key={name} variant={name === savedMyName ? "default" : "secondary"} className="px-3 py-1.5">
+                      {name}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
