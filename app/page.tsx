@@ -403,7 +403,7 @@ export default function Page() {
 
   function toggleCell(dateKey: string, slotId: string): void {
     if (!activeParticipant) {
-      setSaveMessage("Bitte zuerst deinen Namen bestätigen.");
+      setSaveMessage("Bitte zuerst Ihren Namen bestätigen.");
       return;
     }
 
@@ -476,7 +476,7 @@ export default function Page() {
       setMyName(trimmedName);
       setDraftAvailability(normalizedDraft);
       setIsDirty(false);
-      setSaveMessage("Deine Verfügbarkeit wurde gespeichert.");
+      setSaveMessage("Ihre Verfügbarkeit wurde gespeichert.");
     } catch (error) {
       console.error(error);
       setSaveMessage("Speichern fehlgeschlagen. Bitte Tabellenstruktur, RLS-Policy, anonyme Anmeldung und Netzwerk prüfen.");
@@ -511,39 +511,25 @@ export default function Page() {
   return (
     <div className="min-h-screen bg-[#f6f7f4] p-3 sm:p-4 lg:p-6">
       <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-4 lg:gap-6">
-        <div className="rounded-[28px] border border-slate-200 bg-white px-5 py-5 shadow-sm sm:px-6 sm:py-6">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <div className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">Terminvereinbarer</div>
-              <div className="mt-2 text-base text-slate-600 sm:text-lg">Meeting: Weiterentwicklung KS-Schallschutzrechners</div>
-              <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-600">
-                <strong>Kurzanleitung:</strong> Namen eingeben und bestätigen, passende Zeitfenster im Kalender anklicken und danach speichern. <strong>Farben im Kalender:</strong> Weiße Felder bedeuten, dass bisher niemand dieses Zeitfenster gewählt hat. Hellgrüne Felder zeigen bereits gewählte Zeitfenster. Dunkelgrüne Felder markieren die aktuell beliebtesten drei Zeitfenster. Ein blauer Rand bedeutet, dass du dieses Zeitfenster selbst ausgewählt hast.
-              </div>
-            </div>
-            <Button variant="outline" className="w-full gap-2 sm:w-auto" onClick={() => void fetchAllAvailability(true)} disabled={isRefreshing || isLoading}>
-              <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
-              {isRefreshing ? "Wird aktualisiert…" : "Aktualisieren"}
-            </Button>
+        <div className="rounded-2xl border bg-white p-6 shadow-sm">
+          <div className="text-3xl font-bold text-slate-900">Terminvereinbarer</div>
+          <div className="mt-2 text-base text-slate-600 sm:text-lg">Meeting: Weiterentwicklung KS-Schallschutzrechners</div>
+          <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-600">
+            <strong>Kurzanleitung:</strong> Geben Sie Ihren Namen ein und bestätigen Sie ihn. Wählen Sie anschließend passende Zeitfenster im Kalender aus und speichern Sie danach Ihre Auswahl. <strong>Farben im Kalender:</strong> Weiße Felder bedeuten, dass bisher niemand dieses Zeitfenster gewählt hat. Hellgrüne Felder zeigen bereits gewählte Zeitfenster. Dunkelgrüne Felder markieren die aktuell beliebtesten drei Zeitfenster. Ein blauer Rand bedeutet, dass Sie dieses Zeitfenster selbst ausgewählt haben.
           </div>
         </div>
 
-        <Card className="rounded-[28px] border-slate-200 shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+        <Card className="rounded-2xl shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-xl">
               <Users className="h-5 w-5" />
               Namen eingeben
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-col gap-3 xl:flex-row">
-              <Input value={participantNameInput} onChange={(e) => setParticipantNameInput(e.target.value)} placeholder="Deinen Namen eingeben" onKeyDown={(e) => e.key === "Enter" && registerMe()} className="h-11 rounded-xl" />
-              <div className="flex flex-col gap-3 sm:flex-row xl:w-auto">
-                <Button onClick={registerMe} className="h-11 rounded-xl">Bestätigen</Button>
-                <Button className="h-11 gap-2 rounded-xl" onClick={() => void saveMyAvailability()} disabled={isSaving || !savedMyName || !isDirty}>
-                  <Save className="h-4 w-4" />
-                  {isSaving ? "Wird gespeichert…" : "Auswahl speichern"}
-                </Button>
-              </div>
+              <Input value={participantNameInput} onChange={(e) => setParticipantNameInput(e.target.value)} placeholder="Ihren Namen eingeben" onKeyDown={(e) => e.key === "Enter" && registerMe()} className="h-11 rounded-xl" />
+              <Button onClick={registerMe} className="h-11 rounded-xl">Bestätigen</Button>
             </div>
 
             {isLoading ? (
@@ -563,7 +549,7 @@ export default function Page() {
         </Card>
 
         {!supabaseRef.current && (
-          <Alert className="rounded-[28px] border-amber-200 bg-amber-50">
+          <Alert className="rounded-2xl border-amber-200 bg-amber-50">
             <AlertDescription className="text-sm leading-6 text-amber-900">
               NEXT_PUBLIC_SUPABASE_URL und NEXT_PUBLIC_SUPABASE_ANON_KEY sind noch nicht gesetzt. Die Seite läuft nur im lokalen Demo-Modus.
             </AlertDescription>
@@ -606,6 +592,15 @@ export default function Page() {
                   Today
                 </Button>
               </div>
+
+              <Button
+                className="h-9 w-full gap-2 rounded-[16px] sm:h-11 sm:w-auto sm:rounded-[18px] lg:h-14 lg:rounded-[22px] lg:px-6 lg:text-lg"
+                onClick={() => void saveMyAvailability()}
+                disabled={isSaving || !savedMyName || !isDirty}
+              >
+                <Save className="h-4 w-4 lg:h-5 lg:w-5" />
+                {isSaving ? "Wird gespeichert…" : "Auswahl speichern"}
+              </Button>
             </div>
             <p className="text-xs text-slate-600 sm:text-sm">Ein Klick markiert ein Zeitfenster. Ein weiterer Klick entfernt die Auswahl wieder.</p>
           </CardHeader>
@@ -620,7 +615,7 @@ export default function Page() {
                   const isToday = formatDateKey(day) === formatDateKey(new Date());
 
                   return (
-                    <div key={dateKey} className={`rounded-[18px] sm:rounded-[22px] lg:rounded-[28px] border border-slate-200 bg-white px-1 py-2 text-center sm:px-2 sm:py-3 lg:px-3 lg:py-5 ${hasOwnSelection ? "bg-blue-50" : ""}`}>
+                    <div key={dateKey} className={`rounded-[18px] border border-slate-200 bg-white px-1 py-2 text-center sm:rounded-[22px] sm:px-2 sm:py-3 lg:rounded-[28px] lg:px-3 lg:py-5 ${hasOwnSelection ? "bg-blue-50" : ""}`}>
                       <div className="text-[10px] uppercase tracking-wide text-slate-500 sm:text-xs">{WEEKDAYS[index]}</div>
                       <div className={`mt-1 text-2xl font-semibold leading-none sm:text-3xl lg:mt-2 lg:text-5xl ${hasOwnSelection ? "text-blue-700" : "text-slate-800"}`}>{day.getDate()}</div>
                       {isToday && <div className="mt-1 text-[10px] text-slate-500 sm:text-xs lg:mt-3 lg:text-sm">Heute</div>}
@@ -630,7 +625,7 @@ export default function Page() {
 
                 {TIME_SLOTS.map((slot) => (
                   <React.Fragment key={slot.id}>
-                    <div className="flex items-start rounded-[16px] sm:rounded-[20px] lg:rounded-[28px] border border-slate-200 bg-white px-1.5 py-2 text-[10px] font-medium leading-tight text-slate-700 sm:px-2.5 sm:py-3 sm:text-xs md:text-sm lg:px-4 lg:py-6 lg:text-xl xl:text-2xl">
+                    <div className="flex items-start rounded-[16px] border border-slate-200 bg-white px-1.5 py-2 text-[10px] font-medium leading-tight text-slate-700 sm:rounded-[20px] sm:px-2.5 sm:py-3 sm:text-xs md:text-sm lg:rounded-[28px] lg:px-4 lg:py-6 lg:text-xl xl:text-2xl">
                       {slot.label}
                     </div>
                     {weekDays.map((day) => {
