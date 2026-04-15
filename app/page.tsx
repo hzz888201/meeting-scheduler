@@ -571,42 +571,45 @@ export default function Page() {
           <CardHeader className="gap-4 border-b border-slate-100 pb-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex flex-wrap items-center gap-3">
-                <Button variant="outline" className="h-12 rounded-2xl border-2 border-green-500 px-6 text-lg font-semibold text-green-600 hover:bg-green-50" onClick={goToCurrentWeek}>
-                  Today
-                </Button>
-                <Button variant="ghost" size="icon" className="h-12 w-12 rounded-2xl" onClick={goPrevWeek} aria-label="Vorherige Woche">
+                <Button variant="ghost" size="icon" className="h-14 w-14 rounded-[22px] border border-slate-200 bg-white" onClick={goPrevWeek} aria-label="Vorherige Woche">
                   <ChevronLeft className="h-7 w-7" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-12 w-12 rounded-2xl" onClick={goNextWeek} aria-label="Nächste Woche">
+                <div className="min-w-[260px] rounded-[24px] border border-slate-200 bg-white px-6 py-4 text-center text-2xl font-semibold text-slate-900 sm:min-w-[420px] sm:text-3xl">
+                  {weekRangeLabel}
+                </div>
+                <Button variant="ghost" size="icon" className="h-14 w-14 rounded-[22px] border border-slate-200 bg-white" onClick={goNextWeek} aria-label="Nächste Woche">
                   <ChevronRight className="h-7 w-7" />
                 </Button>
-                <div className="text-2xl font-bold tracking-tight text-slate-900 sm:text-4xl">{weekRangeLabel}</div>
+                <Button variant="outline" className="h-14 rounded-[22px] border-2 border-green-500 px-6 text-lg font-semibold text-green-600 hover:bg-green-50" onClick={goToCurrentWeek}>
+                  Today
+                </Button>
               </div>
             </div>
+            <p className="text-sm text-slate-600">Ein Klick markiert ein Zeitfenster. Ein weiterer Klick entfernt die Auswahl wieder.</p>
           </CardHeader>
 
-          <CardContent className="p-0">
+          <CardContent className="p-3 sm:p-4 lg:p-5">
             <div className="overflow-x-auto">
               <div className="min-w-[980px] lg:min-w-0">
-                <div className="grid grid-cols-[110px_repeat(7,minmax(0,1fr))] gap-0 border-t border-slate-100">
-                  <div className="border-r border-slate-100 bg-white" />
+                <div className="grid grid-cols-[150px_repeat(7,minmax(0,1fr))] gap-3">
+                  <div />
                   {weekDays.map((day, index) => {
                     const dateKey = formatDateKey(day);
                     const hasOwnSelection = Boolean((draftAvailability[dateKey] || []).length);
                     const isToday = formatDateKey(day) === formatDateKey(new Date());
 
                     return (
-                      <div key={dateKey} className="border-r border-slate-100 bg-white px-3 py-4 text-center">
+                      <div key={dateKey} className={`rounded-[28px] border border-slate-200 bg-white px-3 py-5 text-center ${hasOwnSelection ? "bg-blue-50" : ""}`}>
                         <div className="text-sm uppercase tracking-wide text-slate-500">{WEEKDAYS[index]}</div>
-                        <div className={`mt-1 text-4xl font-semibold ${hasOwnSelection ? "text-blue-700" : "text-slate-800"}`}>{day.getDate()}</div>
-                        {isToday && <div className="mt-1 text-xs text-slate-500">Heute</div>}
+                        <div className={`mt-2 text-5xl font-semibold leading-none ${hasOwnSelection ? "text-blue-700" : "text-slate-800"}`}>{day.getDate()}</div>
+                        {isToday && <div className="mt-3 text-sm text-slate-500">Heute</div>}
                       </div>
                     );
                   })}
 
                   {TIME_SLOTS.map((slot) => (
                     <React.Fragment key={slot.id}>
-                      <div className="flex items-center border-r border-t border-slate-100 bg-white px-3 py-5 text-sm font-medium text-slate-700">
+                      <div className="flex items-start rounded-[28px] border border-slate-200 bg-white px-4 py-6 text-2xl font-medium text-slate-700">
                         {slot.label}
                       </div>
                       {weekDays.map((day) => {
@@ -620,14 +623,14 @@ export default function Page() {
                           <button
                             key={`${dateKey}-${slot.id}`}
                             onClick={() => toggleCell(dateKey, slot.id)}
-                            className={`relative min-h-[96px] border-r border-t border-slate-100 px-3 py-3 transition ${
+                            className={`relative min-h-[138px] rounded-[28px] px-4 py-4 text-left transition ${
                               isTopThree
                                 ? selected
-                                  ? "bg-green-500 text-white hover:bg-green-500 border-4 border-green-700"
-                                  : "bg-green-500 text-white hover:bg-green-500"
+                                  ? "border-4 border-blue-500 bg-green-500 text-white"
+                                  : "border border-slate-200 bg-green-500 text-white"
                                 : selected
-                                  ? "bg-blue-500 text-white hover:bg-blue-500"
-                                  : "bg-white hover:bg-slate-50"
+                                  ? "border border-blue-500 bg-blue-500 text-white"
+                                  : "border border-slate-200 bg-white hover:bg-slate-50"
                             }`}
                           >
                             <div className="flex h-full items-end justify-end">
