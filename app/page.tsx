@@ -670,7 +670,7 @@ export default function Page() {
     <div className="min-h-screen bg-[#f6f7f4] p-3 sm:p-4 lg:p-6">
       <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-4 lg:gap-6">
         <div className="rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="text-3xl font-bold text-slate-900">Terminabstimunger</div>
+          <div className="text-3xl font-bold text-slate-900">Terminabstimung</div>
           <div className="mt-2 text-base text-slate-600 sm:text-lg">
             Meeting: Weiterentwicklung KS-Schallschutzrechners
           </div>
