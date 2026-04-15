@@ -306,6 +306,11 @@ export default function Page() {
     return activeCalendarView && availability[activeCalendarView] ? { [activeCalendarView]: availability[activeCalendarView] } : {};
   }, [activeCalendarView, availability]);
 
+  const viewedPersonAvailability = useMemo(() => {
+    if (activeCalendarView === "all") return null;
+    return normalizePersonAvailability(availability[activeCalendarView] || {});
+  }, [activeCalendarView, availability]);
+
   const cellCountMap = useMemo(() => {
     const map: Record<string, number> = {};
     Object.values(viewAvailability).forEach((personData) => {
@@ -575,41 +580,50 @@ export default function Page() {
                     </div>
                     {weekDays.map((day) => {
                       const dateKey = formatDateKey(day);
-                      const selected = (draftAvailability[dateKey] || []).includes(slot.id);
-                      const count = cellCountMap[`${dateKey}__${slot.id}`] || 0;
-                      const hasAnySelection = count > 0;
-                      const isTopThree = topThreeCellKeys.has(`${dateKey}__${slot.id}`);
+                      const ownDraftSelected = (draftAvailability[dateKey] || []).includes(slot.id);
+                      const viewedSelected = activeCalendarView === "all"
+                        ? (cellCountMap[`${dateKey}__${slot.id}`] || 0) > 0
+                        : Boolean(viewedPersonAvailability?.[dateKey]?.includes(slot.id));
+                      const count = activeCalendarView === "all"
+                        ? cellCountMap[`${dateKey}__${slot.id}`] || 0
+                        : viewedSelected ? 1 : 0;
+                      const hasAnySelection = viewedSelected;
+                      const isTopThree = activeCalendarView === "all" && topThreeCellKeys.has(`${dateKey}__${slot.id}`);
+                      const showOwnBorder = activeCalendarView === "all"
+                        ? ownDraftSelected
+                        : activeCalendarView === savedMyName && ownDraftSelected;
+
                       return (
                         <button
                           key={`${dateKey}-${slot.id}`}
                           onClick={() => toggleCell(dateKey, slot.id)}
                           className={`relative min-h-[52px] rounded-[14px] px-1 py-1 text-left transition sm:min-h-[68px] sm:rounded-[18px] sm:px-1.5 sm:py-1.5 md:min-h-[82px] md:rounded-[20px] lg:min-h-[112px] lg:rounded-[28px] lg:px-4 lg:py-4 ${
-                            selected
-                              ? isTopThree
+                            isTopThree
+                              ? showOwnBorder
                                 ? "border-4 border-blue-500 bg-green-600 text-white"
-                                : hasAnySelection
+                                : "border border-slate-200 bg-green-600 text-white"
+                              : hasAnySelection
+                                ? showOwnBorder
                                   ? activeCalendarView === "all"
                                     ? "border-2 border-blue-500 bg-green-100 text-slate-800"
                                     : "border-2 border-blue-500 bg-blue-50 text-slate-800"
-                                  : "border-2 border-blue-500 bg-white text-slate-800"
-                              : isTopThree
-                                ? "border border-slate-200 bg-green-600 text-white"
-                                : hasAnySelection
-                                  ? activeCalendarView === "all"
+                                  : activeCalendarView === "all"
                                     ? "border border-slate-200 bg-green-100 text-slate-800"
                                     : "border border-slate-200 bg-blue-50 text-slate-800"
+                                : showOwnBorder
+                                  ? "border-2 border-blue-500 bg-white text-slate-800"
                                   : "border border-slate-200 bg-white hover:bg-slate-50"
                           }`}
                         >
                           <div className="flex h-full items-end justify-end">
-                            {(hasAnySelection || selected) ? (
+                            {(hasAnySelection || showOwnBorder) ? (
                               <Badge
                                 variant="outline"
                                 className={`max-w-full whitespace-nowrap px-1 py-0 text-[9px] font-semibold leading-none sm:px-1.5 sm:py-0.5 sm:text-[11px] md:px-2 md:py-0.5 md:text-xs lg:px-2.5 lg:py-1 lg:text-sm xl:text-base ${
                                   isTopThree ? "border-white/40 bg-white/10 text-white" : "border-slate-200 text-slate-700"
                                 }`}
                               >
-                                {count} / {activeCalendarView === "all" ? participants.length : 1}
+                                {activeCalendarView === "all" ? `${count} / ${participants.length}` : viewedSelected ? "1 / 1" : ""}
                               </Badge>
                             ) : null}
                           </div>
