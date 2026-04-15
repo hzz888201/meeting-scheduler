@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { motion } from "framer-motion";
 import {
   Users,
@@ -56,10 +55,6 @@ function getPollId(): string {
   return params.get("poll")?.trim() || DEFAULT_POLL_ID;
 }
 
-function getStorageKey(pollId: string): string {
-  return `meeting-scheduler-local-${pollId}`;
-}
-
 function getProfileKey(pollId: string): string {
   return `meeting-scheduler-profile-${pollId}`;
 }
@@ -89,7 +84,6 @@ function normalizePersonAvailability(input: unknown): PersonAvailability {
   if (!input || typeof input !== "object") return {};
 
   const next: PersonAvailability = {};
-
   Object.entries(input as Record<string, unknown>).forEach(([dateKey, slots]) => {
     if (!Array.isArray(slots)) return;
     const cleaned = Array.from(new Set(slots.filter(Boolean))).sort() as string[];
@@ -103,7 +97,7 @@ function inflateRowsToAvailability(rows: MeetingRow[]): AvailabilityMap {
   const result: AvailabilityMap = {};
 
   rows.forEach((row) => {
-    const ownerKey = row.owner_user_id || row.participant_name;
+    const ownerKey = row.owner_user_id;
     if (!ownerKey || !row.date_key) return;
 
     if (!result[ownerKey]) {
@@ -117,35 +111,6 @@ function inflateRowsToAvailability(rows: MeetingRow[]): AvailabilityMap {
     result[ownerKey].availability[row.date_key] = Array.isArray(row.slots)
       ? Array.from(new Set(row.slots)).sort()
       : [];
-  });
-
-  return result;
-}
-
-function inflateLocalAvailability(input: unknown): AvailabilityMap {
-  if (!input || typeof input !== "object") return {};
-
-  const result: AvailabilityMap = {};
-
-  Object.entries(input as Record<string, unknown>).forEach(([ownerKey, value]) => {
-    if (!value || typeof value !== "object") return;
-
-    const maybeEntry = value as { participantName?: unknown; availability?: unknown };
-
-    if ("availability" in maybeEntry) {
-      result[ownerKey] = {
-        participantName:
-          typeof maybeEntry.participantName === "string" && maybeEntry.participantName.trim()
-            ? maybeEntry.participantName
-            : ownerKey,
-        availability: normalizePersonAvailability(maybeEntry.availability),
-      };
-    } else {
-      result[ownerKey] = {
-        participantName: ownerKey,
-        availability: normalizePersonAvailability(value),
-      };
-    }
   });
 
   return result;
@@ -238,192 +203,41 @@ export default function Page() {
   const [activeCalendarView, setActiveCalendarView] = useState<CalendarView>("all");
   const [isDirty, setIsDirty] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingData, setIsLoadingData] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
+
   const [currentUserId, setCurrentUserId] = useState("");
-  const [authReady, setAuthReady] = useState(false);
-  const [authChecked, setAuthChecked] = useState(false);
-  const [authError, setAuthError] = useState("");
-  const [emailInput, setEmailInput] = useState("");
   const [sessionEmail, setSessionEmail] = useState("");
+  const [authChecked, setAuthChecked] = useState(false);
+  const [emailInput, setEmailInput] = useState("");
   const [isSendingMagicLink, setIsSendingMagicLink] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
+  const [authError, setAuthError] = useState("");
 
   const supabaseRef = useRef<SupabaseClient | null>(null);
   const weekDays = useMemo(() => getWeekDays(weekStart), [weekStart]);
 
-  const currentOwnerKey = supabaseRef.current
-    ? currentUserId
-    : (savedMyName || myName).trim();
-
+  const currentOwnerKey = currentUserId;
   const activeParticipant = savedMyName || myName;
-  const isLoggedIn = !supabaseRef.current || Boolean(currentUserId);
+  const isLoggedIn = Boolean(currentUserId);
 
   useEffect(() => {
     setPollId(getPollId());
     supabaseRef.current = createSupabaseBrowserClient();
-    if (!supabaseRef.current) {
-      setAuthReady(true);
-      setAuthChecked(true);
-    }
     setActiveCalendarView("all");
   }, []);
 
-  async function fetchAllAvailability(): Promise<void> {
-    const supabase = supabaseRef.current;
-
-    if (!supabase) {
-      if (typeof window !== "undefined") {
-        const localRaw = localStorage.getItem(getStorageKey(pollId));
-        const local = localRaw ? JSON.parse(localRaw) : {};
-        setAvailability(inflateLocalAvailability(local.availability || {}));
-      }
-      return;
-    }
-
-    if (!currentUserId) {
-      setAvailability({});
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from("meeting_availability")
-      .select("participant_name, owner_user_id, date_key, slots")
-      .eq("poll_id", pollId);
-
-    if (error) {
-      setSaveMessage(
-        "Online-Daten konnten nicht geladen werden. Bitte Supabase-Konfiguration, RLS oder Netzwerk prüfen."
-      );
-    } else {
-      setAvailability(inflateRowsToAvailability((data || []) as MeetingRow[]));
-    }
-  }
-
-  async function sendMagicLink(): Promise<void> {
-    const supabase = supabaseRef.current;
-    const trimmedEmail = emailInput.trim();
-
-    if (!supabase) {
-      setAuthMessage("Supabase ist nicht konfiguriert. Magic Link ist im Demo-Modus nicht verfügbar.");
-      return;
-    }
-
-    if (!trimmedEmail) {
-      setAuthMessage("Bitte geben Sie eine E-Mail-Adresse ein.");
-      return;
-    }
-
-    setIsSendingMagicLink(true);
-    setAuthMessage("");
-    setAuthError("");
-
-    try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: trimmedEmail,
-        options: {
-          emailRedirectTo: getMagicLinkRedirectUrl(pollId),
-          shouldCreateUser: true,
-        },
-      });
-
-      if (error) throw error;
-
-      setAuthMessage("Der Magic Link wurde versendet. Bitte prüfen Sie Ihr E-Mail-Postfach.");
-    } catch (error) {
-      console.error(error);
-      setAuthMessage("Der Magic Link konnte nicht gesendet werden. Bitte prüfen Sie Auth-Einstellungen und Redirect-URLs.");
-    } finally {
-      setIsSendingMagicLink(false);
-    }
-  }
-
-  async function signOut(): Promise<void> {
-    const supabase = supabaseRef.current;
-    if (!supabase) return;
-
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      setAuthMessage("Abmeldung fehlgeschlagen.");
-      return;
-    }
-
-    setCurrentUserId("");
-    setSessionEmail("");
-    setAvailability({});
-    setDraftAvailability({});
-    setIsDirty(false);
-    setAuthReady(false);
-    setAuthMessage("Sie wurden abgemeldet.");
-  }
-
   useEffect(() => {
     if (!pollId) return;
+    if (typeof window === "undefined") return;
 
-    let ignore = false;
+    const profileRaw = localStorage.getItem(getProfileKey(pollId));
+    const profile = profileRaw ? JSON.parse(profileRaw) : {};
+    const cachedName = profile.myName || "";
 
-    async function init(): Promise<void> {
-      setIsLoading(true);
-
-      if (typeof window !== "undefined") {
-        const profileRaw = localStorage.getItem(getProfileKey(pollId));
-        const profile = profileRaw ? JSON.parse(profileRaw) : {};
-        const cachedName = profile.myName || "";
-
-        if (!ignore) {
-          setMyName(cachedName);
-          setSavedMyName(cachedName);
-          setParticipantNameInput(cachedName);
-        }
-      }
-
-      const supabase = supabaseRef.current;
-
-      if (!supabase) {
-        await fetchAllAvailability();
-        if (!ignore) {
-          setIsLoading(false);
-          setAuthChecked(true);
-        }
-        return;
-      }
-
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession();
-
-      if (sessionError) {
-        if (!ignore) {
-          setSaveMessage("Anmeldestatus konnte nicht gelesen werden. Bitte Supabase Auth prüfen.");
-          setAuthError("Anmeldestatus konnte nicht gelesen werden. Bitte Supabase Auth prüfen.");
-          setAuthReady(false);
-          setAuthChecked(true);
-          setIsLoading(false);
-        }
-        return;
-      }
-
-      if (!ignore) {
-        setCurrentUserId(session?.user?.id || "");
-        setSessionEmail(session?.user?.email || "");
-        setAuthReady(Boolean(session?.user?.id));
-        setAuthChecked(true);
-        setAuthError("");
-      }
-
-      if (session?.user?.id) {
-        await fetchAllAvailability();
-      }
-
-      if (!ignore) setIsLoading(false);
-    }
-
-    void init();
-
-    return () => {
-      ignore = true;
-    };
+    setMyName(cachedName);
+    setSavedMyName(cachedName);
+    setParticipantNameInput(cachedName);
   }, [pollId]);
 
   useEffect(() => {
@@ -432,9 +246,114 @@ export default function Page() {
   }, [myName, pollId]);
 
   useEffect(() => {
-    if (!pollId || typeof window === "undefined" || supabaseRef.current) return;
-    localStorage.setItem(getStorageKey(pollId), JSON.stringify({ availability }));
-  }, [availability, pollId]);
+    const supabase = supabaseRef.current;
+    if (!supabase) {
+      setAuthChecked(true);
+      setAuthError("Supabase ist nicht konfiguriert.");
+      return;
+    }
+
+    let isMounted = true;
+
+    async function initSession() {
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
+
+      if (!isMounted) return;
+
+      if (error) {
+        setAuthError("Anmeldestatus konnte nicht gelesen werden.");
+        setAuthChecked(true);
+        return;
+      }
+
+      setCurrentUserId(session?.user?.id || "");
+      setSessionEmail(session?.user?.email || "");
+      setAuthChecked(true);
+    }
+
+    void initSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setCurrentUserId(session?.user?.id || "");
+      setSessionEmail(session?.user?.email || "");
+      setAuthChecked(true);
+      if (session?.user?.id) {
+        setAuthError("");
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  async function fetchAllAvailability(userId: string): Promise<void> {
+    const supabase = supabaseRef.current;
+    if (!supabase || !userId) {
+      setAvailability({});
+      return;
+    }
+
+    setIsLoadingData(true);
+
+    const { data, error } = await supabase
+      .from("meeting_availability")
+      .select("participant_name, owner_user_id, date_key, slots")
+      .eq("poll_id", pollId);
+
+    if (error) {
+      setSaveMessage("Online-Daten konnten nicht geladen werden.");
+      setAvailability({});
+    } else {
+      setAvailability(inflateRowsToAvailability((data || []) as MeetingRow[]));
+    }
+
+    setIsLoadingData(false);
+  }
+
+  useEffect(() => {
+    if (!authChecked) return;
+
+    if (!currentUserId) {
+      setAvailability({});
+      setDraftAvailability({});
+      setIsDirty(false);
+      return;
+    }
+
+    void fetchAllAvailability(currentUserId);
+  }, [authChecked, currentUserId, pollId]);
+
+  useEffect(() => {
+    const supabase = supabaseRef.current;
+    if (!supabase || !pollId || !currentUserId) return;
+
+    const channel = supabase
+      .channel(`meeting-poll-${pollId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "meeting_availability",
+          filter: `poll_id=eq.${pollId}`,
+        },
+        () => {
+          void fetchAllAvailability(currentUserId);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [pollId, currentUserId]);
 
   useEffect(() => {
     if (!currentOwnerKey) {
@@ -452,60 +371,14 @@ export default function Page() {
 
   useEffect(() => {
     if (!currentOwnerKey) return;
-    if (savedMyName) return;
 
     const serverName = availability[currentOwnerKey]?.participantName?.trim() || "";
-
-    if (serverName) {
+    if (serverName && !savedMyName) {
       setMyName(serverName);
       setSavedMyName(serverName);
       setParticipantNameInput(serverName);
     }
   }, [availability, currentOwnerKey, savedMyName]);
-
-  useEffect(() => {
-    const supabase = supabaseRef.current;
-    if (!supabase || !pollId) return;
-
-    const channel = supabase
-      .channel(`meeting-poll-${pollId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "meeting_availability",
-          filter: `poll_id=eq.${pollId}`,
-        },
-        async () => {
-          if (currentUserId) {
-            await fetchAllAvailability();
-          }
-        }
-      )
-      .subscribe();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      const nextUserId = session?.user?.id || "";
-      setCurrentUserId(nextUserId);
-      setSessionEmail(session?.user?.email || "");
-      setAuthReady(Boolean(nextUserId));
-      setAuthChecked(true);
-      if (nextUserId) {
-        setAuthError("");
-        await fetchAllAvailability();
-      } else {
-        setAvailability({});
-      }
-    });
-
-    return () => {
-      void supabase.removeChannel(channel);
-      subscription.unsubscribe();
-    };
-  }, [pollId, currentUserId]);
 
   const participants = useMemo(
     () =>
@@ -585,9 +458,7 @@ export default function Page() {
       const dateKey = formatDateKey(day);
       TIME_SLOTS.forEach((slot) => {
         const count = aggregatedCellCountMap[`${dateKey}__${slot.id}`] || 0;
-        if (count > threshold) {
-          result.push({ dateKey, slotId: slot.id, label: slot.label, count });
-        }
+        if (count > threshold) result.push({ dateKey, slotId: slot.id, label: slot.label, count });
       });
     });
 
@@ -605,6 +476,63 @@ export default function Page() {
         ? `Auswahl von ${viewedParticipantName}`
         : "Persönlicher Kalender";
 
+  async function sendMagicLink(): Promise<void> {
+    const supabase = supabaseRef.current;
+    const trimmedEmail = emailInput.trim();
+
+    if (!supabase) {
+      setAuthMessage("Supabase ist nicht konfiguriert.");
+      return;
+    }
+
+    if (!trimmedEmail) {
+      setAuthMessage("Bitte geben Sie eine E-Mail-Adresse ein.");
+      return;
+    }
+
+    setIsSendingMagicLink(true);
+    setAuthMessage("");
+    setAuthError("");
+
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: trimmedEmail,
+        options: {
+          shouldCreateUser: true,
+          emailRedirectTo: getMagicLinkRedirectUrl(pollId),
+        },
+      });
+
+      if (error) throw error;
+
+      setAuthMessage("Der Magic Link wurde versendet. Bitte prüfen Sie Ihr E-Mail-Postfach.");
+    } catch (error) {
+      console.error(error);
+      setAuthMessage("Der Magic Link konnte nicht gesendet werden.");
+    } finally {
+      setIsSendingMagicLink(false);
+    }
+  }
+
+  async function signOut(): Promise<void> {
+    const supabase = supabaseRef.current;
+    if (!supabase) return;
+
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      setAuthMessage("Abmeldung fehlgeschlagen.");
+      return;
+    }
+
+    setAuthMessage("Sie wurden abgemeldet.");
+    setCurrentUserId("");
+    setSessionEmail("");
+    setAvailability({});
+    setDraftAvailability({});
+    setIsDirty(false);
+    setActiveCalendarView("all");
+  }
+
   function registerMe(): void {
     const trimmed = participantNameInput.trim();
     if (!trimmed) return;
@@ -619,7 +547,6 @@ export default function Page() {
       setSaveMessage("Bitte zuerst Ihren Namen bestätigen.");
       return;
     }
-
     if (!canEditCurrentView) {
       setSaveMessage("Im Kalender einer anderen Person ist nur die Anzeige möglich.");
       return;
@@ -631,11 +558,8 @@ export default function Page() {
       ? existing.filter((s) => s !== slotId)
       : [...existing, slotId];
 
-    if (updated.length === 0) {
-      delete next[dateKey];
-    } else {
-      next[dateKey] = [...updated].sort();
-    }
+    if (updated.length === 0) delete next[dateKey];
+    else next[dateKey] = [...updated].sort();
 
     setDraftAvailability(normalizePersonAvailability(next));
     setIsDirty(true);
@@ -644,16 +568,15 @@ export default function Page() {
 
   async function saveMyAvailability(): Promise<void> {
     const trimmedName = activeParticipant.trim();
+    const supabase = supabaseRef.current;
 
     if (!trimmedName) {
       setSaveMessage("Bitte zuerst einen Namen eingeben und bestätigen.");
       return;
     }
 
-    const supabase = supabaseRef.current;
-
-    if (supabase && (!authReady || !currentUserId)) {
-      setSaveMessage("Bitte melden Sie sich zuerst per Magic Link an.");
+    if (!supabase || !currentUserId) {
+      setSaveMessage("Bitte melden Sie sich zuerst per E-Mail an.");
       return;
     }
 
@@ -662,48 +585,30 @@ export default function Page() {
     setSaveMessage("");
 
     try {
-      if (supabase) {
-        const { error: deleteError } = await supabase
+      const { error: deleteError } = await supabase
+        .from("meeting_availability")
+        .delete()
+        .eq("poll_id", pollId)
+        .eq("owner_user_id", currentUserId);
+
+      if (deleteError) throw deleteError;
+
+      const rowsToInsert = flattenPersonAvailability(
+        normalizedDraft,
+        trimmedName,
+        currentUserId,
+        pollId
+      );
+
+      if (rowsToInsert.length > 0) {
+        const { error: insertError } = await supabase
           .from("meeting_availability")
-          .delete()
-          .eq("poll_id", pollId)
-          .eq("owner_user_id", currentUserId);
+          .insert(rowsToInsert);
 
-        if (deleteError) throw deleteError;
-
-        const rowsToInsert = flattenPersonAvailability(
-          normalizedDraft,
-          trimmedName,
-          currentUserId,
-          pollId
-        );
-
-        if (rowsToInsert.length > 0) {
-          const { error: insertError } = await supabase
-            .from("meeting_availability")
-            .insert(rowsToInsert);
-
-          if (insertError) throw insertError;
-        }
-
-        await fetchAllAvailability();
-      } else {
-        setAvailability((prev) => {
-          const next = { ...prev };
-          const previousLocalKey = savedMyName?.trim();
-
-          if (previousLocalKey && previousLocalKey !== trimmedName) {
-            delete next[previousLocalKey];
-          }
-
-          next[trimmedName] = {
-            participantName: trimmedName,
-            availability: normalizedDraft,
-          };
-
-          return next;
-        });
+        if (insertError) throw insertError;
       }
+
+      await fetchAllAvailability(currentUserId);
 
       setSavedMyName(trimmedName);
       setMyName(trimmedName);
@@ -713,9 +618,7 @@ export default function Page() {
       setSaveMessage("Ihre Verfügbarkeit wurde gespeichert.");
     } catch (error) {
       console.error(error);
-      setSaveMessage(
-        "Speichern fehlgeschlagen. Bitte Tabellenstruktur, RLS-Policy, Auth-Einstellungen und Netzwerk prüfen."
-      );
+      setSaveMessage("Speichern fehlgeschlagen.");
     } finally {
       setIsSaving(false);
     }
@@ -749,66 +652,51 @@ export default function Page() {
     Boolean(currentOwnerKey) &&
     !arePersonAvailabilityEqual(mySavedAvailability, draftAvailability);
 
-  return (
-    <div className="min-h-screen bg-[#f6f7f4] p-3 sm:p-4 lg:p-6">
-      <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-4 lg:gap-6">
-        <div className="rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="text-3xl font-bold text-slate-900">Terminabstimunger</div>
-          <div className="mt-2 text-base text-slate-600 sm:text-lg">
-            Meeting: Weiterentwicklung KS-Schallschutzrechners
-          </div>
-          <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-600">
-            <strong>Kurzanleitung:</strong> Geben Sie Ihren Namen ein und bestätigen Sie ihn.
-            Wählen Sie anschließend passende Zeitfenster im Kalender aus und speichern Sie danach
-            Ihre Auswahl.
-          </div>
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-[#f6f7f4] p-4">
+        <div className="mx-auto max-w-xl">
+          <Card className="rounded-2xl shadow-sm">
+            <CardContent className="p-6 text-sm text-slate-600">
+              Anmeldestatus wird geprüft…
+            </CardContent>
+          </Card>
         </div>
+      </div>
+    );
+  }
 
-        {supabaseRef.current && (
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-[#f6f7f4] p-4">
+        <div className="mx-auto flex max-w-xl flex-col gap-4">
           <Card className="rounded-2xl shadow-sm">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <Mail className="h-5 w-5" />
-                Anmeldung per Magic Link
-              </CardTitle>
+              <CardTitle className="text-2xl">Terminabstimunger</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {!isLoggedIn ? (
-                <>
-                  <div className="flex flex-col gap-3 xl:flex-row">
-                    <Input
-                      value={emailInput}
-                      onChange={(e) => setEmailInput(e.target.value)}
-                      placeholder="Ihre E-Mail-Adresse"
-                      onKeyDown={(e) => e.key === "Enter" && void sendMagicLink()}
-                      className="h-11 rounded-xl"
-                    />
-                    <Button
-                      onClick={() => void sendMagicLink()}
-                      className="h-11 rounded-xl"
-                      disabled={isSendingMagicLink}
-                    >
-                      {isSendingMagicLink ? "Wird gesendet…" : "Magic Link senden"}
-                    </Button>
-                  </div>
+              <div className="text-sm text-slate-600">
+                Bitte melden Sie sich zuerst per E-Mail an. Nach der Anmeldung können Sie Ihre
+                bisherigen Auswahlzeiten jederzeit wieder öffnen und ändern.
+              </div>
 
-                  <div className="text-sm text-slate-500">
-                    Melden Sie sich mit Ihrer E-Mail-Adresse an. Danach können Sie Ihre eigenen
-                    Zeitfenster bearbeiten und speichern.
-                  </div>
-                </>
-              ) : (
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-center gap-2 text-sm text-slate-700">
-                    <span>Angemeldet als</span>
-                    <Badge variant="secondary">{sessionEmail || "Benutzer"}</Badge>
-                  </div>
-                  <Button variant="outline" className="gap-2 rounded-xl" onClick={() => void signOut()}>
-                    <LogOut className="h-4 w-4" />
-                    Abmelden
-                  </Button>
-                </div>
-              )}
+              <div className="flex flex-col gap-3">
+                <Input
+                  value={emailInput}
+                  onChange={(e) => setEmailInput(e.target.value)}
+                  placeholder="Ihre E-Mail-Adresse"
+                  onKeyDown={(e) => e.key === "Enter" && void sendMagicLink()}
+                  className="h-11 rounded-xl"
+                />
+                <Button
+                  onClick={() => void sendMagicLink()}
+                  className="h-11 rounded-xl gap-2"
+                  disabled={isSendingMagicLink}
+                >
+                  <Mail className="h-4 w-4" />
+                  {isSendingMagicLink ? "Wird gesendet…" : "Magic Link senden"}
+                </Button>
+              </div>
 
               {authMessage && (
                 <div className="rounded-2xl bg-slate-100 p-4 text-sm text-slate-600">
@@ -823,7 +711,37 @@ export default function Page() {
               )}
             </CardContent>
           </Card>
-        )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#f6f7f4] p-3 sm:p-4 lg:p-6">
+      <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-4 lg:gap-6">
+        <div className="rounded-2xl border bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-3xl font-bold text-slate-900">Terminabstimunger</div>
+              <div className="mt-2 text-base text-slate-600 sm:text-lg">
+                Meeting: Weiterentwicklung KS-Schallschutzrechners
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary">{sessionEmail || "Benutzer"}</Badge>
+              <Button variant="outline" className="gap-2 rounded-xl" onClick={() => void signOut()}>
+                <LogOut className="h-4 w-4" />
+                Abmelden
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-600">
+            <strong>Kurzanleitung:</strong> Geben Sie Ihren Namen ein und bestätigen Sie ihn.
+            Wählen Sie anschließend passende Zeitfenster im Kalender aus und speichern Sie danach
+            Ihre Auswahl.
+          </div>
+        </div>
 
         <Card className="rounded-2xl shadow-sm">
           <CardHeader>
@@ -840,9 +758,8 @@ export default function Page() {
                 placeholder="Ihren Namen eingeben"
                 onKeyDown={(e) => e.key === "Enter" && registerMe()}
                 className="h-11 rounded-xl"
-                disabled={!isLoggedIn}
               />
-              <Button onClick={registerMe} className="h-11 rounded-xl" disabled={!isLoggedIn}>
+              <Button onClick={registerMe} className="h-11 rounded-xl">
                 Bestätigen
               </Button>
             </div>
@@ -876,19 +793,11 @@ export default function Page() {
               </div>
             </div>
 
-            {isLoading ? (
+            {isLoadingData && (
               <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
                 Daten werden geladen…
               </div>
-            ) : supabaseRef.current && !authChecked ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
-                Anmeldestatus wird geprüft…
-              </div>
-            ) : supabaseRef.current && !isLoggedIn ? (
-              <div className="rounded-2xl border border-dashed border-amber-300 p-4 text-sm text-amber-700">
-                Bitte melden Sie sich zuerst per Magic Link an.
-              </div>
-            ) : null}
+            )}
 
             {hasServerDiff && !isDirty && (
               <div className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-800">
@@ -903,15 +812,6 @@ export default function Page() {
             )}
           </CardContent>
         </Card>
-
-        {!supabaseRef.current && (
-          <Alert className="rounded-2xl border-amber-200 bg-amber-50">
-            <AlertDescription className="text-sm leading-6 text-amber-900">
-              NEXT_PUBLIC_SUPABASE_URL und NEXT_PUBLIC_SUPABASE_ANON_KEY sind noch nicht gesetzt.
-              Die Seite läuft nur im lokalen Demo-Modus ohne Magic Link.
-            </AlertDescription>
-          </Alert>
-        )}
 
         <Card className="overflow-hidden rounded-[28px] border-slate-200 shadow-sm">
           <CardHeader className="gap-3 border-b border-slate-100 pb-4 sm:gap-4 sm:pb-5">
@@ -953,7 +853,7 @@ export default function Page() {
               <Button
                 className="h-9 w-full gap-2 rounded-[16px] sm:h-11 sm:w-auto sm:rounded-[18px] lg:h-14 lg:rounded-[22px] lg:px-6 lg:text-lg"
                 onClick={() => void saveMyAvailability()}
-                disabled={isSaving || !savedMyName || !isDirty || !canEditCurrentView || !isLoggedIn}
+                disabled={isSaving || !savedMyName || !isDirty || !canEditCurrentView}
               >
                 <Save className="h-4 w-4 lg:h-5 lg:w-5" />
                 {isSaving ? "Wird gespeichert…" : "Auswahl speichern"}
@@ -1074,21 +974,19 @@ export default function Page() {
                         <button
                           key={`${dateKey}-${slot.id}`}
                           type="button"
-                          disabled={isForeignPersonalView || !isLoggedIn}
+                          disabled={isForeignPersonalView}
                           onClick={() => {
-                            if (!isForeignPersonalView && isLoggedIn) {
+                            if (!isForeignPersonalView) {
                               toggleCell(dateKey, slot.id);
                             }
                           }}
                           className={`relative min-h-[52px] rounded-[14px] px-1 py-1 text-left transition sm:min-h-[68px] sm:rounded-[18px] sm:px-1.5 sm:py-1.5 md:min-h-[82px] md:rounded-[20px] lg:min-h-[112px] lg:rounded-[28px] lg:px-4 lg:py-4 ${
-                            isForeignPersonalView || !isLoggedIn
-                              ? "cursor-default opacity-100"
-                              : "cursor-pointer"
+                            isForeignPersonalView ? "cursor-default opacity-100" : "cursor-pointer"
                           } ${
                             isFilledInCurrentView
                               ? `${borderClass} ${filledClass}`
                               : `${borderClass} bg-white text-slate-800 ${
-                                  isForeignPersonalView || !isLoggedIn ? "" : "hover:bg-slate-50"
+                                  isForeignPersonalView ? "" : "hover:bg-slate-50"
                                 }`
                           }`}
                         >
