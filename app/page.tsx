@@ -588,66 +588,69 @@ export default function Page() {
             <p className="text-sm text-slate-600">Ein Klick markiert ein Zeitfenster. Ein weiterer Klick entfernt die Auswahl wieder.</p>
           </CardHeader>
 
-          <CardContent className="p-3 sm:p-4 lg:p-5">
-            <div className="overflow-x-auto">
-              <div className="min-w-[980px] lg:min-w-0">
-                <div className="grid grid-cols-[150px_repeat(7,minmax(0,1fr))] gap-3">
-                  <div />
-                  {weekDays.map((day, index) => {
-                    const dateKey = formatDateKey(day);
-                    const hasOwnSelection = Boolean((draftAvailability[dateKey] || []).length);
-                    const isToday = formatDateKey(day) === formatDateKey(new Date());
+          <CardContent className="p-2 sm:p-3 lg:p-5">
+            <div className="w-full">
+              <div className="grid w-full grid-cols-[72px_repeat(7,minmax(0,1fr))] gap-1.5 sm:grid-cols-[84px_repeat(7,minmax(0,1fr))] sm:gap-2 lg:grid-cols-[110px_repeat(7,minmax(0,1fr))] lg:gap-3">
+                <div />
+                {weekDays.map((day, index) => {
+                  const dateKey = formatDateKey(day);
+                  const hasOwnSelection = Boolean((draftAvailability[dateKey] || []).length);
+                  const isToday = formatDateKey(day) === formatDateKey(new Date());
 
-                    return (
-                      <div key={dateKey} className={`rounded-[28px] border border-slate-200 bg-white px-3 py-5 text-center ${hasOwnSelection ? "bg-blue-50" : ""}`}>
-                        <div className="text-sm uppercase tracking-wide text-slate-500">{WEEKDAYS[index]}</div>
-                        <div className={`mt-2 text-5xl font-semibold leading-none ${hasOwnSelection ? "text-blue-700" : "text-slate-800"}`}>{day.getDate()}</div>
-                        {isToday && <div className="mt-3 text-sm text-slate-500">Heute</div>}
-                      </div>
-                    );
-                  })}
+                  return (
+                    <div key={dateKey} className={`rounded-[18px] sm:rounded-[22px] lg:rounded-[28px] border border-slate-200 bg-white px-1 py-2 text-center sm:px-2 sm:py-3 lg:px-3 lg:py-5 ${hasOwnSelection ? "bg-blue-50" : ""}`}>
+                      <div className="text-[10px] uppercase tracking-wide text-slate-500 sm:text-xs">{WEEKDAYS[index]}</div>
+                      <div className={`mt-1 text-2xl font-semibold leading-none sm:text-3xl lg:mt-2 lg:text-5xl ${hasOwnSelection ? "text-blue-700" : "text-slate-800"}`}>{day.getDate()}</div>
+                      {isToday && <div className="mt-1 text-[10px] text-slate-500 sm:text-xs lg:mt-3 lg:text-sm">Heute</div>}
+                    </div>
+                  );
+                })}
 
-                  {TIME_SLOTS.map((slot) => (
-                    <React.Fragment key={slot.id}>
-                      <div className="flex items-start rounded-[28px] border border-slate-200 bg-white px-4 py-6 text-2xl font-medium text-slate-700">
-                        {slot.label}
-                      </div>
-                      {weekDays.map((day) => {
-                        const dateKey = formatDateKey(day);
-                        const selected = (draftAvailability[dateKey] || []).includes(slot.id);
-                        const count = cellCountMap[`${dateKey}__${slot.id}`] || 0;
-                        const hasAnySelection = count > 0;
-                        const isTopThree = topThreeCellKeys.has(`${dateKey}__${slot.id}`);
+                {TIME_SLOTS.map((slot) => (
+                  <React.Fragment key={slot.id}>
+                    <div className="flex items-start rounded-[18px] sm:rounded-[22px] lg:rounded-[28px] border border-slate-200 bg-white px-2 py-3 text-xs font-medium text-slate-700 sm:px-3 sm:py-4 sm:text-sm lg:px-4 lg:py-6 lg:text-2xl">
+                      {slot.label}
+                    </div>
+                    {weekDays.map((day) => {
+                      const dateKey = formatDateKey(day);
+                      const selected = (draftAvailability[dateKey] || []).includes(slot.id);
+                      const count = cellCountMap[`${dateKey}__${slot.id}`] || 0;
+                      const hasAnySelection = count > 0;
+                      const isTopThree = topThreeCellKeys.has(`${dateKey}__${slot.id}`);
 
-                        return (
-                          <button
-                            key={`${dateKey}-${slot.id}`}
-                            onClick={() => toggleCell(dateKey, slot.id)}
-                            className={`relative min-h-[138px] rounded-[28px] px-4 py-4 text-left transition ${
-                              isTopThree
+                      return (
+                        <button
+                          key={`${dateKey}-${slot.id}`}
+                          onClick={() => toggleCell(dateKey, slot.id)}
+                          className={`relative min-h-[72px] rounded-[18px] px-1.5 py-1.5 text-left transition sm:min-h-[92px] sm:rounded-[22px] sm:px-2 sm:py-2 lg:min-h-[138px] lg:rounded-[28px] lg:px-4 lg:py-4 ${
+                            isTopThree
+                              ? selected
+                                ? "border-4 border-blue-500 bg-green-600 text-white"
+                                : "border border-slate-200 bg-green-600 text-white"
+                              : hasAnySelection
                                 ? selected
-                                  ? "border-4 border-blue-500 bg-green-600 text-white"
-                                  : "border border-slate-200 bg-green-600 text-white"
-                                : hasAnySelection
-                                  ? selected
-                                    ? "border-2 border-blue-500 bg-green-100 text-slate-800"
-                                    : "border border-slate-200 bg-green-100 text-slate-800"
-                                  : "border border-slate-200 bg-white hover:bg-slate-50"
-                            }`}
-                          >
-                            <div className="flex h-full items-end justify-end">
-                              {hasAnySelection ? (
-                                <Badge variant="outline" className={isTopThree ? "border-white/40 bg-white/10 text-white" : "border-slate-200 text-slate-700"}>
-                                  {count} / {participants.length}
-                                </Badge>
-                              ) : null}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </React.Fragment>
-                  ))}
-                </div>
+                                  ? "border-2 border-blue-500 bg-green-100 text-slate-800"
+                                  : "border border-slate-200 bg-green-100 text-slate-800"
+                                : "border border-slate-200 bg-white hover:bg-slate-50"
+                          }`}
+                        >
+                          <div className="flex h-full items-end justify-end">
+                            {hasAnySelection ? (
+                              <Badge
+                                variant="outline"
+                                className={`px-1.5 py-0.5 text-xs font-semibold sm:px-2 sm:py-1 sm:text-sm lg:text-base ${
+                                  isTopThree ? "border-white/40 bg-white/10 text-white" : "border-slate-200 text-slate-700"
+                                }`}
+                              >
+                                {count} / {participants.length}
+                              </Badge>
+                            ) : null}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </React.Fragment>
+                ))}
               </div>
             </div>
           </CardContent>
