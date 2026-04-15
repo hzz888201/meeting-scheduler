@@ -626,16 +626,18 @@ export default function Page() {
                             className={`relative min-h-[138px] rounded-[28px] px-4 py-4 text-left transition ${
                               isTopThree
                                 ? selected
-                                  ? "border-4 border-blue-500 bg-green-500 text-white"
-                                  : "border border-slate-200 bg-green-500 text-white"
-                                : selected
-                                  ? "border border-blue-500 bg-blue-500 text-white"
+                                  ? "border-4 border-blue-500 bg-green-600 text-white"
+                                  : "border border-slate-200 bg-green-600 text-white"
+                                : hasAnySelection
+                                  ? selected
+                                    ? "border-2 border-blue-500 bg-green-100 text-slate-800"
+                                    : "border border-slate-200 bg-green-100 text-slate-800"
                                   : "border border-slate-200 bg-white hover:bg-slate-50"
                             }`}
                           >
                             <div className="flex h-full items-end justify-end">
                               {hasAnySelection ? (
-                                <Badge variant="outline" className={isTopThree || selected ? "border-white/40 bg-white/10 text-white" : "border-slate-200 text-slate-700"}>
+                                <Badge variant="outline" className={isTopThree ? "border-white/40 bg-white/10 text-white" : "border-slate-200 text-slate-700"}>
                                   {count} / {participants.length}
                                 </Badge>
                               ) : null}
