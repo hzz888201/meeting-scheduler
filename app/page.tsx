@@ -79,6 +79,7 @@ function formatDateDE(dateKey: string): string {
 
 function normalizePersonAvailability(input: unknown): PersonAvailability {
   if (!input || typeof input !== "object") return {};
+
   const next: PersonAvailability = {};
 
   Object.entries(input as Record<string, unknown>).forEach(([dateKey, slots]) => {
@@ -266,9 +267,7 @@ export default function Page() {
         "Online-Daten konnten nicht geladen werden. Bitte Supabase-Konfiguration, RLS oder Netzwerk prüfen."
       );
     } else {
-      setAvailability(
-        inflateRowsToAvailability((data || []) as MeetingRow[])
-      );
+      setAvailability(inflateRowsToAvailability((data || []) as MeetingRow[]));
     }
   }
 
@@ -358,10 +357,7 @@ export default function Page() {
 
   useEffect(() => {
     if (!pollId || typeof window === "undefined" || supabaseRef.current) return;
-    localStorage.setItem(
-      getStorageKey(pollId),
-      JSON.stringify({ availability })
-    );
+    localStorage.setItem(getStorageKey(pollId), JSON.stringify({ availability }));
   }, [availability, pollId]);
 
   useEffect(() => {
@@ -523,8 +519,8 @@ export default function Page() {
     activeCalendarView === "all"
       ? "Gemeinsamer Kalender"
       : viewedParticipantName
-      ? `Auswahl von ${viewedParticipantName}`
-      : "Persönlicher Kalender";
+        ? `Auswahl von ${viewedParticipantName}`
+        : "Persönlicher Kalender";
 
   function registerMe(): void {
     const trimmed = participantNameInput.trim();
@@ -674,7 +670,7 @@ export default function Page() {
     <div className="min-h-screen bg-[#f6f7f4] p-3 sm:p-4 lg:p-6">
       <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-4 lg:gap-6">
         <div className="rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="text-3xl font-bold text-slate-900">Terminvereinbarer</div>
+          <div className="text-3xl font-bold text-slate-900">Terminabstimunger</div>
           <div className="mt-2 text-base text-slate-600 sm:text-lg">
             Meeting: Weiterentwicklung KS-Schallschutzrechners
           </div>
@@ -682,11 +678,6 @@ export default function Page() {
             <strong>Kurzanleitung:</strong> Geben Sie Ihren Namen ein und bestätigen Sie ihn.
             Wählen Sie anschließend passende Zeitfenster im Kalender aus und speichern Sie danach
             Ihre Auswahl.
-            <strong> Farben im Kalender:</strong> Weiße Felder bedeuten, dass bisher niemand dieses
-            Zeitfenster gewählt hat. Hellgrüne Felder zeigen bereits gewählte Zeitfenster im
-            gemeinsamen Kalender. Dunkelgrüne Felder markieren die aktuell beliebtesten drei
-            Zeitfenster im gemeinsamen Kalender. Ein blauer Rand bedeutet, dass Sie dieses
-            Zeitfenster in Ihrem eigenen Entwurf ausgewählt haben.
           </div>
         </div>
 
@@ -821,11 +812,21 @@ export default function Page() {
               </Button>
             </div>
 
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-xs text-slate-600 sm:text-sm">
-                Ein Klick markiert ein Zeitfenster. Ein weiterer Klick entfernt die Auswahl wieder.
-              </p>
-              <div className="text-sm font-medium text-slate-700">{calendarTitle}</div>
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs text-slate-600 sm:text-sm">
+                  Ein Klick markiert ein Zeitfenster. Ein weiterer Klick entfernt die Auswahl wieder.
+                </p>
+                <div className="text-sm font-medium text-slate-700">{calendarTitle}</div>
+              </div>
+
+              <div className="rounded-2xl bg-slate-50 p-3 text-xs leading-6 text-slate-600 sm:text-sm">
+                <strong>Farben im Kalender:</strong> Weiße Felder bedeuten, dass bisher niemand
+                dieses Zeitfenster gewählt hat. Hellgrüne Felder zeigen bereits gewählte
+                Zeitfenster im gemeinsamen Kalender. Dunkelgrüne Felder markieren die aktuell
+                beliebtesten drei Zeitfenster im gemeinsamen Kalender. Ein blauer Rand bedeutet,
+                dass Sie dieses Zeitfenster in Ihrem eigenen Entwurf ausgewählt haben.
+              </div>
             </div>
           </CardHeader>
 
@@ -919,13 +920,15 @@ export default function Page() {
                       return (
                         <button
                           key={`${dateKey}-${slot.id}`}
+                          type="button"
+                          disabled={isForeignPersonalView}
                           onClick={() => {
                             if (!isForeignPersonalView) {
                               toggleCell(dateKey, slot.id);
                             }
                           }}
                           className={`relative min-h-[52px] rounded-[14px] px-1 py-1 text-left transition sm:min-h-[68px] sm:rounded-[18px] sm:px-1.5 sm:py-1.5 md:min-h-[82px] md:rounded-[20px] lg:min-h-[112px] lg:rounded-[28px] lg:px-4 lg:py-4 ${
-                            isForeignPersonalView ? "cursor-default" : "cursor-pointer"
+                            isForeignPersonalView ? "cursor-default opacity-100" : "cursor-pointer"
                           } ${
                             isFilledInCurrentView
                               ? `${borderClass} ${filledClass}`
@@ -951,7 +954,7 @@ export default function Page() {
                             ) : displayedPersonalSelected ? (
                               <Badge
                                 variant="outline"
-                                className="max-w-full whitespace-nowrap px-1 py-0 text-[9px] font-semibold leading-none sm:px-1.5 sm:py-0.5 sm:text-[11px] md:px-2 md:py-0.5 md:text-xs lg:px-2.5 lg:py-1 lg:text-sm xl:text-base border-slate-200 text-slate-700"
+                                className="max-w-full whitespace-nowrap border-slate-200 px-1 py-0 text-[9px] font-semibold leading-none text-slate-700 sm:px-1.5 sm:py-0.5 sm:text-[11px] md:px-2 md:py-0.5 md:text-xs lg:px-2.5 lg:py-1 lg:text-sm xl:text-base"
                               >
                                 1 / 1
                               </Badge>
@@ -974,8 +977,8 @@ export default function Page() {
               Zeitfenster mit Mehrheit
             </CardTitle>
             <p className="text-sm text-slate-600">
-              Angezeigt werden alle Zeitfenster, die von mehr als der Hälfte der Teilnehmenden gewählt wurden –
-              sortiert von den meisten zu den wenigsten Stimmen.
+              Angezeigt werden alle Zeitfenster, die von mehr als der Hälfte der Teilnehmenden
+              gewählt wurden – sortiert von den meisten zu den wenigsten Stimmen.
             </p>
           </CardHeader>
           <CardContent>
