@@ -1,4 +1,15 @@
-"use client";
+修改，要求各个参会人员的选择不会互相影响
+个人日历只读取这个人自己已经保存的数据
+不会混入别人数据
+也不会因为当前填写人的点击而改变别人视图里的显示
+共同日历显示的是所有被选择过的方格
+只要任意参会人员选过，这个格子就会显示
+不是“所有人共同都选过”才显示
+热门前三仍然是在共同日历里按总人数统计
+编辑权限也分开了
+你在 Gemeinsamer Kalender 里可以继续编辑自己的草稿
+你在看自己的个人日历时，也可以编辑自己的格子
+你在看别人的个人日历时，只是查看，不能编辑，不会干扰别人"use client"; 
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
