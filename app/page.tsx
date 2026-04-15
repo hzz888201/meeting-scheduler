@@ -831,9 +831,9 @@ export default function Page() {
           </CardHeader>
 
           <CardContent className="p-2 sm:p-3 lg:p-5">
-            <div className="w-full overflow-auto rounded-[24px] border border-slate-100 max-h-[75vh]">
-              <div className="grid min-w-[900px] grid-cols-[64px_repeat(7,minmax(0,1fr))] gap-1 bg-[#f6f7f4] p-1 sm:grid-cols-[78px_repeat(7,minmax(0,1fr))] sm:gap-1.5 sm:p-1.5 md:grid-cols-[88px_repeat(7,minmax(0,1fr))] lg:grid-cols-[110px_repeat(7,minmax(0,1fr))] lg:gap-3 lg:p-3">
-                <div className="sticky top-0 z-30 bg-[#f6f7f4]" />
+            <div className="w-full">
+              <div className="grid w-full grid-cols-[64px_repeat(7,minmax(0,1fr))] gap-1 sm:grid-cols-[78px_repeat(7,minmax(0,1fr))] sm:gap-1.5 md:grid-cols-[88px_repeat(7,minmax(0,1fr))] lg:grid-cols-[110px_repeat(7,minmax(0,1fr))] lg:gap-3">
+                <div />
                 {weekDays.map((day, index) => {
                   const dateKey = formatDateKey(day);
                   const ownDraftHasSelection = Boolean((draftAvailability[dateKey] || []).length);
@@ -842,10 +842,8 @@ export default function Page() {
                   return (
                     <div
                       key={dateKey}
-                      className={`sticky top-0 z-20 rounded-[18px] border border-slate-200 px-1 py-2 text-center shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/90 sm:rounded-[22px] sm:px-2 sm:py-3 lg:rounded-[28px] lg:px-3 lg:py-5 ${
-                        activeCalendarView === "all" && ownDraftHasSelection
-                          ? "bg-blue-50"
-                          : "bg-white"
+                      className={`rounded-[18px] border border-slate-200 bg-white px-1 py-2 text-center sm:rounded-[22px] sm:px-2 sm:py-3 lg:rounded-[28px] lg:px-3 lg:py-5 ${
+                        activeCalendarView === "all" && ownDraftHasSelection ? "bg-blue-50" : ""
                       }`}
                     >
                       <div className="text-[10px] uppercase tracking-wide text-slate-500 sm:text-xs">
