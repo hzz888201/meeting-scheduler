@@ -623,19 +623,21 @@ export default function Page() {
                           key={`${dateKey}-${slot.id}`}
                           onClick={() => toggleCell(dateKey, slot.id)}
                           className={`relative min-h-[72px] rounded-[18px] px-1.5 py-1.5 text-left transition sm:min-h-[92px] sm:rounded-[22px] sm:px-2 sm:py-2 lg:min-h-[138px] lg:rounded-[28px] lg:px-4 lg:py-4 ${
-                            isTopThree
-                              ? selected
+                            selected
+                              ? isTopThree
                                 ? "border-4 border-blue-500 bg-green-600 text-white"
-                                : "border border-slate-200 bg-green-600 text-white"
-                              : hasAnySelection
-                                ? selected
+                                : hasAnySelection
                                   ? "border-2 border-blue-500 bg-green-100 text-slate-800"
-                                  : "border border-slate-200 bg-green-100 text-slate-800"
-                                : "border border-slate-200 bg-white hover:bg-slate-50"
+                                  : "border-2 border-blue-500 bg-white text-slate-800"
+                              : isTopThree
+                                ? "border border-slate-200 bg-green-600 text-white"
+                                : hasAnySelection
+                                  ? "border border-slate-200 bg-green-100 text-slate-800"
+                                  : "border border-slate-200 bg-white hover:bg-slate-50"
                           }`}
                         >
                           <div className="flex h-full items-end justify-end">
-                            {hasAnySelection ? (
+                            {(hasAnySelection || selected) ? (
                               <Badge
                                 variant="outline"
                                 className={`px-1.5 py-0.5 text-xs font-semibold sm:px-2 sm:py-1 sm:text-sm lg:text-base ${
