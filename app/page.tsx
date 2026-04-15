@@ -516,6 +516,9 @@ export default function Page() {
             <div>
               <div className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">Terminvereinbarer</div>
               <div className="mt-2 text-base text-slate-600 sm:text-lg">Meeting: Weiterentwicklung KS-Schallschutzrechners</div>
+              <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-600">
+                <strong>Kurzanleitung:</strong> Namen eingeben und bestätigen, passende Zeitfenster im Kalender anklicken und danach speichern. <strong>Farben im Kalender:</strong> Weiße Felder bedeuten, dass bisher niemand dieses Zeitfenster gewählt hat. Hellgrüne Felder zeigen bereits gewählte Zeitfenster. Dunkelgrüne Felder markieren die aktuell beliebtesten drei Zeitfenster. Ein blauer Rand bedeutet, dass du dieses Zeitfenster selbst ausgewählt hast.
+              </div>
             </div>
             <Button variant="outline" className="w-full gap-2 sm:w-auto" onClick={() => void fetchAllAvailability(true)} disabled={isRefreshing || isLoading}>
               <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
@@ -530,7 +533,6 @@ export default function Page() {
               <Users className="h-5 w-5" />
               Namen eingeben
             </CardTitle>
-            <p className="text-sm leading-6 text-slate-600">1. Namen eingeben und auf „Bestätigen“ klicken. 2. Datum und Zeitfenster auswählen. 3. Auf „Auswahl speichern“ klicken.</p>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-col gap-3 xl:flex-row">
