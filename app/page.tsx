@@ -8,7 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { motion } from "framer-motion";
-import { Users, CheckCircle2, ChevronLeft, ChevronRight, Save, Download } from "lucide-react";
+import {
+  Users,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Save,
+  Download,
+} from "lucide-react";
 
 type AvailabilityMap = Record<string, Record<string, string[]>>;
 type PersonAvailability = Record<string, string[]>;
@@ -35,6 +42,46 @@ const TIME_SLOTS = [
 
 const WEEKDAYS = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 const DEFAULT_POLL_ID = "team-meeting-demo";
+
+const GERMAN_INSTRUCTIONS = `Terminabstimmung
+Weiterentwicklung des KS-Schallschutzrechners
+
+Kurzanleitung
+1. Bitte geben Sie Ihren Namen ein und bestätigen Sie diesen.
+2. Wählen Sie anschließend passende Zeitfenster in Ihrem Kalender aus und speichern Sie danach Ihre Auswahl.
+3. Fertig.
+
+Kalenderansicht
+Klicken Sie auf einen Teilnehmendennamen, um dessen Auswahl anzuzeigen.
+Der gemeinsame Kalender zeigt alle gewählten Zeitfenster.
+
+Bedienung im Kalender
+Einmal klicken: Zeitfenster markieren.
+Noch einmal klicken: Markierung entfernen.
+
+Farben im Kalender
+Weiß: noch nicht gewählt
+Hellgrün: von anderen gewählt
+Dunkelgrün: Top-3-Zeiten
+Blauer Rand: Ihre Auswahl
+
+Zeitfenster mit Mehrheit
+Angezeigt werden: Zeitfenster mit Mehrheitszustimmung, absteigend sortiert.
+`;
+
+function downloadGermanInstructions(): void {
+  const blob = new Blob([GERMAN_INSTRUCTIONS], {
+    type: "text/plain;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "anleitung_terminabstimmung_de.txt";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
 
 function getPollId(): string {
   if (typeof window === "undefined") return DEFAULT_POLL_ID;
@@ -74,15 +121,19 @@ function formatDateDE(dateKey: string): string {
 function normalizePersonAvailability(input: unknown): PersonAvailability {
   if (!input || typeof input !== "object") return {};
   const next: PersonAvailability = {};
+
   Object.entries(input as Record<string, unknown>).forEach(([dateKey, slots]) => {
     if (!Array.isArray(slots)) return;
     const cleaned = Array.from(new Set(slots.filter(Boolean))).sort() as string[];
     if (cleaned.length > 0) next[dateKey] = cleaned;
   });
+
   return next;
 }
 
-function inflateRowsToAvailability(rows: Array<{ participant_name: string; date_key: string; slots: string[] }>): AvailabilityMap {
+function inflateRowsToAvailability(
+  rows: Array<{ participant_name: string; date_key: string; slots: string[] }>
+): AvailabilityMap {
   const result: AvailabilityMap = {};
   rows.forEach((row) => {
     if (!row?.participant_name || !row?.date_key) return;
@@ -94,7 +145,12 @@ function inflateRowsToAvailability(rows: Array<{ participant_name: string; date_
   return result;
 }
 
-function flattenPersonAvailability(personAvailability: PersonAvailability, participantName: string, ownerUserId: string, pollId: string): MeetingRow[] {
+function flattenPersonAvailability(
+  personAvailability: PersonAvailability,
+  participantName: string,
+  ownerUserId: string,
+  pollId: string
+): MeetingRow[] {
   return Object.entries(personAvailability).map(([date_key, slots]) => ({
     poll_id: pollId,
     participant_name: participantName,
@@ -108,6 +164,7 @@ function arePersonAvailabilityEqual(a: PersonAvailability, b: PersonAvailability
   const aKeys = Object.keys(a).sort();
   const bKeys = Object.keys(b).sort();
   if (aKeys.length !== bKeys.length) return false;
+
   for (let i = 0; i < aKeys.length; i += 1) {
     if (aKeys[i] !== bKeys[i]) return false;
     const aSlots = [...(a[aKeys[i]] || [])].sort();
@@ -141,48 +198,11 @@ function formatWeekRange(weekStart: Date): string {
   const startMonth = weekStart.toLocaleDateString("de-DE", { month: "long" });
   const endMonth = end.toLocaleDateString("de-DE", { month: "long" });
   const year = end.getFullYear();
+
   if (weekStart.getMonth() === end.getMonth() && weekStart.getFullYear() === end.getFullYear()) {
     return `${startMonth} ${weekStart.getDate()} – ${end.getDate()}, ${year}`;
   }
   return `${startMonth} ${weekStart.getDate()} – ${endMonth} ${end.getDate()}, ${year}`;
-}
-
-const GERMAN_INSTRUCTIONS = `Terminabstimmung
-Weiterentwicklung des KS-Schallschutzrechners
-
-Kurzanleitung
-1. Bitte geben Sie Ihren Namen ein und bestätigen Sie diesen.
-2. Wählen Sie anschließend passende Zeitfenster in Ihrem Kalender aus und speichern Sie danach Ihre Auswahl.
-3. Fertig.
-
-Kalenderansicht
-Klicken Sie auf einen Teilnehmendennamen, um dessen Auswahl anzuzeigen.
-Der gemeinsame Kalender zeigt alle gewählten Zeitfenster.
-
-Bedienung im Kalender
-Einmal klicken: Zeitfenster markieren.
-Noch einmal klicken: Markierung entfernen.
-
-Farben im Kalender
-Weiß: noch nicht gewählt
-Hellgrün: von anderen gewählt
-Dunkelgrün: Top-3-Zeiten
-Blauer Rand: Ihre Auswahl
-
-Zeitfenster mit Mehrheit
-Angezeigt werden Zeitfenster mit Mehrheitszustimmung, absteigend sortiert.
-`;
-
-function downloadGermanInstructions(): void {
-  const blob = new Blob([GERMAN_INSTRUCTIONS], { type: "text/plain;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "anleitung_terminabstimmung_de.txt";
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
 }
 
 export default function Page() {
@@ -215,6 +235,7 @@ export default function Page() {
 
   async function fetchAllAvailability(): Promise<void> {
     const supabase = supabaseRef.current;
+
     if (!supabase) {
       if (typeof window !== "undefined") {
         const localRaw = localStorage.getItem(getStorageKey(pollId));
@@ -230,7 +251,9 @@ export default function Page() {
       .eq("poll_id", pollId);
 
     if (error) {
-      setSaveMessage("Online-Daten konnten nicht geladen werden. Bitte Supabase-Konfiguration, RLS oder Netzwerk prüfen.");
+      setSaveMessage(
+        "Online-Daten konnten nicht geladen werden. Bitte Supabase-Konfiguration, RLS oder Netzwerk prüfen."
+      );
     } else {
       setAvailability(
         inflateRowsToAvailability(
@@ -251,6 +274,7 @@ export default function Page() {
         const profileRaw = localStorage.getItem(getProfileKey(pollId));
         const profile = profileRaw ? JSON.parse(profileRaw) : {};
         const cachedName = profile.myName || "";
+
         if (!ignore) {
           setMyName(cachedName);
           setSavedMyName(cachedName);
@@ -280,8 +304,12 @@ export default function Page() {
           const { data: anonData, error: anonError } = await supabase.auth.signInAnonymously();
           if (anonError) {
             if (!ignore) {
-              setSaveMessage("Anonyme Anmeldung fehlgeschlagen. Bitte Anonymous Sign-ins in Supabase Auth aktivieren.");
-              setAuthError("Anonyme Anmeldung fehlgeschlagen. Bitte Anonymous Sign-ins in Supabase Auth aktivieren.");
+              setSaveMessage(
+                "Anonyme Anmeldung fehlgeschlagen. Bitte Anonymous Sign-ins in Supabase Auth aktivieren."
+              );
+              setAuthError(
+                "Anonyme Anmeldung fehlgeschlagen. Bitte Anonymous Sign-ins in Supabase Auth aktivieren."
+              );
               setAuthReady(false);
               setIsLoading(false);
             }
@@ -418,7 +446,8 @@ export default function Page() {
     });
   }, [aggregatedCellCountMap, participants.length, weekDays]);
 
-  const calendarTitle = activeCalendarView === "all" ? "Gemeinsamer Kalender" : `Auswahl von ${activeCalendarView}`;
+  const calendarTitle =
+    activeCalendarView === "all" ? "Gemeinsamer Kalender" : `Auswahl von ${activeCalendarView}`;
 
   function registerMe(): void {
     const trimmed = participantNameInput.trim();
@@ -439,7 +468,9 @@ export default function Page() {
 
     const next = { ...draftAvailability };
     const existing = next[dateKey] || [];
-    const updated = existing.includes(slotId) ? existing.filter((s) => s !== slotId) : [...existing, slotId];
+    const updated = existing.includes(slotId)
+      ? existing.filter((s) => s !== slotId)
+      : [...existing, slotId];
 
     if (updated.length === 0) delete next[dateKey];
     else next[dateKey] = [...updated].sort();
@@ -545,13 +576,16 @@ export default function Page() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex-1">
               <div className="text-3xl font-bold text-slate-900">Terminabstimmung</div>
-              <div className="mt-2 text-base text-slate-600 sm:text-lg">Weiterentwicklung des KS-Schallschutzrechners</div>
+              <div className="mt-2 text-base text-slate-600 sm:text-lg">
+                Weiterentwicklung des KS-Schallschutzrechners
+              </div>
               <div className="mt-4 rounded-3xl border border-blue-200 bg-blue-50/90 p-5 text-sm leading-7 text-slate-700 shadow-sm sm:p-6 sm:text-base">
                 <div>1. Bitte geben Sie Ihren Namen ein und bestätigen Sie diesen.</div>
                 <div>2. Wählen Sie anschließend passende Zeitfenster in Ihrem Kalender aus und speichern Sie danach Ihre Auswahl.</div>
                 <div>3. Fertig.</div>
               </div>
             </div>
+
             <Button
               variant="outline"
               className="h-11 shrink-0 gap-2 rounded-xl border-blue-200 bg-white text-slate-700 hover:bg-slate-50"
@@ -586,7 +620,8 @@ export default function Page() {
 
             <div className="space-y-3">
               <div className="text-base sm:text-lg font-medium text-slate-700">
-                Kalenderansicht: Klicken Sie auf einen Teilnehmendennamen, um dessen Auswahl anzuzeigen. Der gemeinsame Kalender zeigt alle gewählten Zeitfenster.
+                Kalenderansicht: Klicken Sie auf einen Teilnehmendennamen, um dessen Auswahl anzuzeigen.
+                Der gemeinsame Kalender zeigt alle gewählten Zeitfenster.
               </div>
               <div className="flex flex-wrap gap-3">
                 <Badge
@@ -625,14 +660,17 @@ export default function Page() {
               </div>
             )}
 
-            {saveMessage && <div className="rounded-2xl bg-slate-100 p-4 text-sm text-slate-600">{saveMessage}</div>}
+            {saveMessage && (
+              <div className="rounded-2xl bg-slate-100 p-4 text-sm text-slate-600">{saveMessage}</div>
+            )}
           </CardContent>
         </Card>
 
         {!supabaseRef.current && (
           <Alert className="rounded-2xl border-amber-200 bg-amber-50">
             <AlertDescription className="text-sm leading-6 text-amber-900">
-              NEXT_PUBLIC_SUPABASE_URL und NEXT_PUBLIC_SUPABASE_ANON_KEY sind noch nicht gesetzt. Die Seite läuft nur im lokalen Demo-Modus.
+              NEXT_PUBLIC_SUPABASE_URL und NEXT_PUBLIC_SUPABASE_ANON_KEY sind noch nicht gesetzt.
+              Die Seite läuft nur im lokalen Demo-Modus.
             </AlertDescription>
           </Alert>
         )}
@@ -686,4 +724,185 @@ export default function Page() {
 
             <div className="flex items-center justify-between gap-3">
               <p className="rounded-2xl bg-slate-50 px-4 py-3 text-xs leading-6 text-slate-700 sm:text-sm">
-                Einmal klicken: Zeitfenster markieren. Noch einmal klicken: Markierung entfernen.{
+                Einmal klicken: Zeitfenster markieren. Noch einmal klicken: Markierung entfernen.{" "}
+                <span className="inline-flex items-center gap-1">
+                  <span className="inline-block h-3 w-3 rounded-full border border-slate-300 bg-white" />
+                  Weiß: noch nicht gewählt
+                </span>{" "}
+                •{" "}
+                <span className="inline-flex items-center gap-1">
+                  <span className="inline-block h-3 w-3 rounded-full bg-green-100" />
+                  von anderen gewählt
+                </span>{" "}
+                •{" "}
+                <span className="inline-flex items-center gap-1">
+                  <span className="inline-block h-3 w-3 rounded-full bg-green-600" />
+                  Top-3-Zeiten
+                </span>{" "}
+                •{" "}
+                <span className="inline-flex items-center gap-1">
+                  <span className="inline-block h-3 w-3 rounded-full border-2 border-blue-500 bg-white" />
+                  Ihre Auswahl
+                </span>
+              </p>
+              <div className="text-sm font-medium text-slate-700">{calendarTitle}</div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="p-2 sm:p-3 lg:p-5">
+            <div className="w-full">
+              <div className="grid w-full grid-cols-[64px_repeat(7,minmax(0,1fr))] gap-1 sm:grid-cols-[78px_repeat(7,minmax(0,1fr))] sm:gap-1.5 md:grid-cols-[88px_repeat(7,minmax(0,1fr))] lg:grid-cols-[110px_repeat(7,minmax(0,1fr))] lg:gap-3">
+                <div />
+                {weekDays.map((day, index) => {
+                  const dateKey = formatDateKey(day);
+                  const ownDraftHasSelection = Boolean((draftAvailability[dateKey] || []).length);
+                  const isToday = formatDateKey(day) === formatDateKey(new Date());
+
+                  return (
+                    <div
+                      key={dateKey}
+                      className={`rounded-[18px] border border-slate-200 bg-white px-1 py-2 text-center sm:rounded-[22px] sm:px-2 sm:py-3 lg:rounded-[28px] lg:px-3 lg:py-5 ${
+                        activeCalendarView === "all" && ownDraftHasSelection ? "bg-blue-50" : ""
+                      }`}
+                    >
+                      <div className="text-[10px] uppercase tracking-wide text-slate-500 sm:text-xs">
+                        {WEEKDAYS[index]}
+                      </div>
+                      <div
+                        className={`mt-1 text-2xl font-semibold leading-none sm:text-3xl lg:mt-2 lg:text-5xl ${
+                          activeCalendarView === "all" && ownDraftHasSelection ? "text-blue-700" : "text-slate-800"
+                        }`}
+                      >
+                        {day.getDate()}
+                      </div>
+                      {isToday && (
+                        <div className="mt-1 text-[10px] text-slate-500 sm:text-xs lg:mt-3 lg:text-sm">
+                          Heute
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {TIME_SLOTS.map((slot) => (
+                  <React.Fragment key={slot.id}>
+                    <div className="flex items-start rounded-[16px] border border-slate-200 bg-white px-1.5 py-2 text-[10px] font-medium leading-tight text-slate-700 sm:rounded-[20px] sm:px-2.5 sm:py-3 sm:text-xs md:text-sm lg:rounded-[28px] lg:px-4 lg:py-6 lg:text-xl xl:text-2xl">
+                      {slot.label}
+                    </div>
+
+                    {weekDays.map((day) => {
+                      const dateKey = formatDateKey(day);
+                      const ownDraftSelected = (draftAvailability[dateKey] || []).includes(slot.id);
+                      const aggregatedCount = aggregatedCellCountMap[`${dateKey}__${slot.id}`] || 0;
+                      const personSelected = Boolean(viewedPersonAvailability[dateKey]?.includes(slot.id));
+                      const isTopThree =
+                        activeCalendarView === "all" && topThreeCellKeys.has(`${dateKey}__${slot.id}`);
+                      const showOwnBlueBorder = canEditCurrentView && ownDraftSelected;
+
+                      const isFilledInCurrentView =
+                        activeCalendarView === "all" ? aggregatedCount > 0 : personSelected;
+
+                      const filledClass =
+                        activeCalendarView === "all"
+                          ? isTopThree
+                            ? "bg-green-600 text-white"
+                            : "bg-green-100 text-slate-800"
+                          : "bg-blue-50 text-slate-800";
+
+                      const borderClass = showOwnBlueBorder
+                        ? activeCalendarView === "all" && isTopThree
+                          ? "border-4 border-blue-500"
+                          : "border-2 border-blue-500"
+                        : "border border-slate-200";
+
+                      return (
+                        <button
+                          key={`${dateKey}-${slot.id}`}
+                          onClick={() => toggleCell(dateKey, slot.id)}
+                          className={`relative min-h-[52px] rounded-[14px] px-1 py-1 text-left transition sm:min-h-[68px] sm:rounded-[18px] sm:px-1.5 sm:py-1.5 md:min-h-[82px] md:rounded-[20px] lg:min-h-[112px] lg:rounded-[28px] lg:px-4 lg:py-4 ${
+                            isFilledInCurrentView
+                              ? `${borderClass} ${filledClass}`
+                              : `${borderClass} bg-white hover:bg-slate-50 text-slate-800`
+                          }`}
+                        >
+                          <div className="flex h-full items-end justify-end">
+                            {(activeCalendarView === "all"
+                              ? aggregatedCount > 0
+                              : personSelected || showOwnBlueBorder) ? (
+                              <Badge
+                                variant="outline"
+                                className={`max-w-full whitespace-nowrap px-1 py-0 text-[9px] font-semibold leading-none sm:px-1.5 sm:py-0.5 sm:text-[11px] md:px-2 md:py-0.5 md:text-xs lg:px-2.5 lg:py-1 lg:text-sm xl:text-base ${
+                                  activeCalendarView === "all" && isTopThree
+                                    ? "border-white/40 bg-white/10 text-white"
+                                    : "border-slate-200 text-slate-700"
+                                }`}
+                              >
+                                {activeCalendarView === "all"
+                                  ? `${aggregatedCount} / ${participants.length}`
+                                  : personSelected
+                                  ? `${aggregatedCount} / ${participants.length}`
+                                  : ""}
+                              </Badge>
+                            ) : null}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-[28px] border-slate-200 shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+              <CheckCircle2 className="h-5 w-5" />
+              Zeitfenster mit Mehrheit
+            </CardTitle>
+            <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">
+              Angezeigt werden: Zeitfenster mit Mehrheitszustimmung, absteigend sortiert.
+            </p>
+          </CardHeader>
+          <CardContent>
+            {activeCalendarView !== "all" ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
+                Diese Übersicht ist nur im gemeinsamen Kalender verfügbar.
+              </div>
+            ) : participants.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
+                Noch keine gespeicherten Teilnehmenden vorhanden.
+              </div>
+            ) : majoritySlots.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
+                Für diese Woche liegt derzeit kein Zeitfenster mit Mehrheit vor.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {majoritySlots.map((item) => (
+                  <motion.div
+                    key={`${item.dateKey}-${item.slotId}`}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="rounded-2xl border bg-slate-50 p-4"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="font-medium">{formatDateDE(item.dateKey)}</div>
+                        <div className="mt-1 text-sm text-slate-600">{item.label}</div>
+                      </div>
+                      <Badge>
+                        {item.count} / {participants.length}
+                      </Badge>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
