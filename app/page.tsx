@@ -147,6 +147,44 @@ function formatWeekRange(weekStart: Date): string {
   return `${startMonth} ${weekStart.getDate()} – ${endMonth} ${end.getDate()}, ${year}`;
 }
 
+const GERMAN_INSTRUCTIONS = `Terminabstimmung
+Weiterentwicklung des KS-Schallschutzrechners
+
+Kurzanleitung
+1. Bitte geben Sie Ihren Namen ein und bestätigen Sie diesen.
+2. Wählen Sie anschließend passende Zeitfenster in Ihrem Kalender aus und speichern Sie danach Ihre Auswahl.
+3. Fertig.
+
+Kalenderansicht
+Klicken Sie auf einen Teilnehmendennamen, um dessen Auswahl anzuzeigen.
+Der gemeinsame Kalender zeigt alle gewählten Zeitfenster.
+
+Bedienung im Kalender
+Einmal klicken: Zeitfenster markieren.
+Noch einmal klicken: Markierung entfernen.
+
+Farben im Kalender
+Weiß: noch nicht gewählt
+Hellgrün: von anderen gewählt
+Dunkelgrün: Top-3-Zeiten
+Blauer Rand: Ihre Auswahl
+
+Zeitfenster mit Mehrheit
+Angezeigt werden Zeitfenster mit Mehrheitszustimmung, absteigend sortiert.
+`;
+
+function downloadGermanInstructions(): void {
+  const blob = new Blob([GERMAN_INSTRUCTIONS], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "anleitung_terminabstimmung_de.txt";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 export default function Page() {
   const [pollId, setPollId] = useState(DEFAULT_POLL_ID);
   const [weekStart, setWeekStart] = useState<Date>(getWeekStart(new Date()));
@@ -504,12 +542,24 @@ export default function Page() {
     <div className="min-h-screen bg-[#f6f7f4] p-3 sm:p-4 lg:p-6">
       <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-4 lg:gap-6">
         <div className="rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="text-3xl font-bold text-slate-900">Terminabstimmung</div>
-          <div className="mt-2 text-base text-slate-600 sm:text-lg">Weiterentwicklung des KS-Schallschutzrechners</div>
-          <div className="mt-4 rounded-3xl border border-blue-200 bg-blue-50/90 p-5 text-sm leading-7 text-slate-700 shadow-sm sm:p-6 sm:text-base">
-            <div>1. Bitte geben Sie Ihren Namen ein und bestätigen Sie diesen.</div>
-            <div>2. Wählen Sie anschließend passende Zeitfenster in Ihrem Kalender aus und speichern Sie danach Ihre Auswahl.</div>
-            <div>3. Fertig.</div>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex-1">
+              <div className="text-3xl font-bold text-slate-900">Terminabstimmung</div>
+              <div className="mt-2 text-base text-slate-600 sm:text-lg">Weiterentwicklung des KS-Schallschutzrechners</div>
+              <div className="mt-4 rounded-3xl border border-blue-200 bg-blue-50/90 p-5 text-sm leading-7 text-slate-700 shadow-sm sm:p-6 sm:text-base">
+                <div>1. Bitte geben Sie Ihren Namen ein und bestätigen Sie diesen.</div>
+                <div>2. Wählen Sie anschließend passende Zeitfenster in Ihrem Kalender aus und speichern Sie danach Ihre Auswahl.</div>
+                <div>3. Fertig.</div>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              className="h-11 shrink-0 gap-2 rounded-xl border-blue-200 bg-white text-slate-700 hover:bg-slate-50"
+              onClick={downloadGermanInstructions}
+            >
+              <Download className="h-4 w-4" />
+              Anleitung herunterladen
+            </Button>
           </div>
         </div>
 
