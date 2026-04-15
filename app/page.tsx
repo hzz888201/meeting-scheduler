@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { motion } from "framer-motion";
-import { Users, CheckCircle2, ChevronLeft, ChevronRight, Save, RefreshCw } from "lucide-react";
+import { Users, CheckCircle2, ChevronLeft, ChevronRight, Save } from "lucide-react";
 
 type AvailabilityMap = Record<string, Record<string, string[]>>;
 type PersonAvailability = Record<string, string[]>;
@@ -74,19 +74,16 @@ function formatDateDE(dateKey: string): string {
 function normalizePersonAvailability(input: unknown): PersonAvailability {
   if (!input || typeof input !== "object") return {};
   const next: PersonAvailability = {};
-
   Object.entries(input as Record<string, unknown>).forEach(([dateKey, slots]) => {
     if (!Array.isArray(slots)) return;
     const cleaned = Array.from(new Set(slots.filter(Boolean))).sort() as string[];
     if (cleaned.length > 0) next[dateKey] = cleaned;
   });
-
   return next;
 }
 
 function inflateRowsToAvailability(rows: Array<{ participant_name: string; date_key: string; slots: string[] }>): AvailabilityMap {
   const result: AvailabilityMap = {};
-
   rows.forEach((row) => {
     if (!row?.participant_name || !row?.date_key) return;
     if (!result[row.participant_name]) result[row.participant_name] = {};
@@ -94,7 +91,6 @@ function inflateRowsToAvailability(rows: Array<{ participant_name: string; date_
       ? Array.from(new Set(row.slots)).sort()
       : [];
   });
-
   return result;
 }
 
@@ -112,7 +108,6 @@ function arePersonAvailabilityEqual(a: PersonAvailability, b: PersonAvailability
   const aKeys = Object.keys(a).sort();
   const bKeys = Object.keys(b).sort();
   if (aKeys.length !== bKeys.length) return false;
-
   for (let i = 0; i < aKeys.length; i += 1) {
     if (aKeys[i] !== bKeys[i]) return false;
     const aSlots = [...(a[aKeys[i]] || [])].sort();
@@ -122,14 +117,12 @@ function arePersonAvailabilityEqual(a: PersonAvailability, b: PersonAvailability
       if (aSlots[j] !== bSlots[j]) return false;
     }
   }
-
   return true;
 }
 
 function getWeekStart(date: Date): Date {
   const copy = new Date(date);
-  const day = copy.getDay();
-  copy.setDate(copy.getDate() - day);
+  copy.setDate(copy.getDate() - copy.getDay());
   copy.setHours(0, 0, 0, 0);
   return copy;
 }
@@ -148,11 +141,9 @@ function formatWeekRange(weekStart: Date): string {
   const startMonth = weekStart.toLocaleDateString("de-DE", { month: "long" });
   const endMonth = end.toLocaleDateString("de-DE", { month: "long" });
   const year = end.getFullYear();
-
   if (weekStart.getMonth() === end.getMonth() && weekStart.getFullYear() === end.getFullYear()) {
     return `${startMonth} ${weekStart.getDate()} – ${end.getDate()}, ${year}`;
   }
-
   return `${startMonth} ${weekStart.getDate()} – ${endMonth} ${end.getDate()}, ${year}`;
 }
 
@@ -168,7 +159,6 @@ export default function Page() {
   const [isDirty, setIsDirty] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [currentUserId, setCurrentUserId] = useState("");
   const [authReady, setAuthReady] = useState(false);
@@ -185,9 +175,8 @@ export default function Page() {
     setActiveCalendarView("all");
   }, []);
 
-  async function fetchAllAvailability(showRefreshing = false): Promise<void> {
+  async function fetchAllAvailability(): Promise<void> {
     const supabase = supabaseRef.current;
-
     if (!supabase) {
       if (typeof window !== "undefined") {
         const localRaw = localStorage.getItem(getStorageKey(pollId));
@@ -196,8 +185,6 @@ export default function Page() {
       }
       return;
     }
-
-    if (showRefreshing) setIsRefreshing(true);
 
     const { data, error } = await supabase
       .from("meeting_availability")
@@ -209,8 +196,6 @@ export default function Page() {
     } else {
       setAvailability(inflateRowsToAvailability((data || []) as Array<{ participant_name: string; date_key: string; slots: string[] }>));
     }
-
-    if (showRefreshing) setIsRefreshing(false);
   }
 
   useEffect(() => {
@@ -219,12 +204,10 @@ export default function Page() {
 
     async function init(): Promise<void> {
       setIsLoading(true);
-
       if (typeof window !== "undefined") {
         const profileRaw = localStorage.getItem(getProfileKey(pollId));
         const profile = profileRaw ? JSON.parse(profileRaw) : {};
         const cachedName = profile.myName || "";
-
         if (!ignore) {
           setMyName(cachedName);
           setSavedMyName(cachedName);
@@ -234,11 +217,7 @@ export default function Page() {
 
       const supabase = supabaseRef.current;
       if (supabase) {
-        const {
-          data: { session },
-          error: sessionError,
-        } = await supabase.auth.getSession();
-
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         if (sessionError) {
           if (!ignore) {
             setSaveMessage("Anmeldestatus konnte nicht gelesen werden. Bitte Supabase Auth prüfen.");
@@ -271,12 +250,11 @@ export default function Page() {
         }
       }
 
-      await fetchAllAvailability(false);
+      await fetchAllAvailability();
       if (!ignore) setIsLoading(false);
     }
 
     void init();
-
     return () => {
       ignore = true;
     };
@@ -293,35 +271,22 @@ export default function Page() {
       setIsDirty(false);
       return;
     }
-
     const committed = normalizePersonAvailability(availability[savedMyName] || {});
     setDraftAvailability(committed);
     setIsDirty(false);
   }, [availability, savedMyName]);
 
   useEffect(() => {
-    if (!pollId || typeof window === "undefined") return;
-    localStorage.setItem(getStorageKey(pollId), JSON.stringify({ availability, myName: savedMyName || myName }));
-  }, [availability, savedMyName, myName, pollId]);
-
-  useEffect(() => {
     const supabase = supabaseRef.current;
     if (!supabase || !pollId) return;
-
     const channel = supabase
       .channel(`meeting-poll-${pollId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "meeting_availability", filter: `poll_id=eq.${pollId}` },
-        async () => {
-          await fetchAllAvailability(false);
-        }
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "meeting_availability", filter: `poll_id=eq.${pollId}` }, async () => {
+        await fetchAllAvailability();
+      })
       .subscribe();
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setCurrentUserId(session?.user?.id || "");
       setAuthReady(Boolean(session?.user?.id));
       if (session?.user?.id) setAuthError("");
@@ -336,16 +301,11 @@ export default function Page() {
 
   const participants = useMemo(() => Object.keys(availability).sort(), [availability]);
   const weekRangeLabel = useMemo(() => formatWeekRange(weekStart), [weekStart]);
+  const canEditCurrentView = activeCalendarView === "all" || activeCalendarView === savedMyName;
 
-  const displayedAvailability = useMemo<AvailabilityMap>(() => {
-    if (activeCalendarView === "all") return availability;
-    const personData = availability[activeCalendarView];
-    return personData ? { [activeCalendarView]: personData } : {};
-  }, [activeCalendarView, availability]);
-
-  const cellCountMap = useMemo(() => {
+  const aggregatedCellCountMap = useMemo(() => {
     const map: Record<string, number> = {};
-    Object.values(displayedAvailability).forEach((personData) => {
+    Object.values(availability).forEach((personData) => {
       Object.entries(personData).forEach(([dateKey, slots]) => {
         slots.forEach((slotId) => {
           const key = `${dateKey}__${slotId}`;
@@ -354,19 +314,22 @@ export default function Page() {
       });
     });
     return map;
-  }, [displayedAvailability]);
+  }, [availability]);
+
+  const viewedPersonAvailability = useMemo<PersonAvailability>(() => {
+    if (activeCalendarView === "all") return {};
+    return normalizePersonAvailability(availability[activeCalendarView] || {});
+  }, [activeCalendarView, availability]);
 
   const topThreeCellKeys = useMemo(() => {
-    if (activeCalendarView !== "all") return new Set<string>();
-
     const ranked = weekDays
       .flatMap((day) => {
         const dateKey = formatDateKey(day);
         return TIME_SLOTS.map((slot) => ({
           key: `${dateKey}__${slot.id}`,
+          count: aggregatedCellCountMap[`${dateKey}__${slot.id}`] || 0,
           dateKey,
           slotId: slot.id,
-          count: cellCountMap[`${dateKey}__${slot.id}`] || 0,
         }));
       })
       .filter((item) => item.count > 0)
@@ -378,24 +341,19 @@ export default function Page() {
       .slice(0, 3);
 
     return new Set(ranked.map((item) => item.key));
-  }, [activeCalendarView, cellCountMap, weekDays]);
+  }, [aggregatedCellCountMap, weekDays]);
 
   const majoritySlots = useMemo(() => {
-    if (activeCalendarView !== "all") return [] as Array<{ dateKey: string; slotId: string; label: string; count: number }>;
-
     const totalParticipants = participants.length;
     if (totalParticipants === 0) return [] as Array<{ dateKey: string; slotId: string; label: string; count: number }>;
-
     const threshold = totalParticipants / 2;
     const result: Array<{ dateKey: string; slotId: string; label: string; count: number }> = [];
 
     weekDays.forEach((day) => {
       const dateKey = formatDateKey(day);
       TIME_SLOTS.forEach((slot) => {
-        const count = cellCountMap[`${dateKey}__${slot.id}`] || 0;
-        if (count > threshold) {
-          result.push({ dateKey, slotId: slot.id, label: slot.label, count });
-        }
+        const count = aggregatedCellCountMap[`${dateKey}__${slot.id}`] || 0;
+        if (count > threshold) result.push({ dateKey, slotId: slot.id, label: slot.label, count });
       });
     });
 
@@ -404,7 +362,7 @@ export default function Page() {
       if (a.dateKey !== b.dateKey) return a.dateKey.localeCompare(b.dateKey);
       return a.slotId.localeCompare(b.slotId);
     });
-  }, [activeCalendarView, cellCountMap, participants.length, weekDays]);
+  }, [aggregatedCellCountMap, participants.length, weekDays]);
 
   const calendarTitle = activeCalendarView === "all" ? "Gemeinsamer Kalender" : `Auswahl von ${activeCalendarView}`;
 
@@ -420,11 +378,14 @@ export default function Page() {
       setSaveMessage("Bitte zuerst Ihren Namen bestätigen.");
       return;
     }
+    if (!canEditCurrentView) {
+      setSaveMessage("Im Kalender einer anderen Person ist nur die Anzeige möglich.");
+      return;
+    }
 
     const next = { ...draftAvailability };
     const existing = next[dateKey] || [];
     const updated = existing.includes(slotId) ? existing.filter((s) => s !== slotId) : [...existing, slotId];
-
     if (updated.length === 0) delete next[dateKey];
     else next[dateKey] = [...updated].sort();
 
@@ -439,7 +400,6 @@ export default function Page() {
       setSaveMessage("Bitte zuerst einen Namen eingeben und bestätigen.");
       return;
     }
-
     const supabase = supabaseRef.current;
     if (supabase && (!authReady || !currentUserId)) {
       setSaveMessage("Die anonyme Anmeldung ist noch nicht bereit. Bitte kurz warten und erneut versuchen.");
@@ -481,7 +441,7 @@ export default function Page() {
           if (upsertError) throw upsertError;
         }
 
-        await fetchAllAvailability(false);
+        await fetchAllAvailability();
       } else {
         setAvailability((prev) => ({ ...prev, [trimmedName]: normalizedDraft }));
       }
@@ -603,7 +563,7 @@ export default function Page() {
                 </Button>
               </div>
 
-              <Button className="h-9 w-full gap-2 rounded-[16px] sm:h-11 sm:w-auto sm:rounded-[18px] lg:h-14 lg:rounded-[22px] lg:px-6 lg:text-lg" onClick={() => void saveMyAvailability()} disabled={isSaving || !savedMyName || !isDirty}>
+              <Button className="h-9 w-full gap-2 rounded-[16px] sm:h-11 sm:w-auto sm:rounded-[18px] lg:h-14 lg:rounded-[22px] lg:px-6 lg:text-lg" onClick={() => void saveMyAvailability()} disabled={isSaving || !savedMyName || !isDirty || !canEditCurrentView}>
                 <Save className="h-4 w-4 lg:h-5 lg:w-5" />
                 {isSaving ? "Wird gespeichert…" : "Auswahl speichern"}
               </Button>
@@ -639,46 +599,42 @@ export default function Page() {
                     {weekDays.map((day) => {
                       const dateKey = formatDateKey(day);
                       const ownDraftSelected = (draftAvailability[dateKey] || []).includes(slot.id);
-                      const viewCount = cellCountMap[`${dateKey}__${slot.id}`] || 0;
-                      const viewedSelected = viewCount > 0;
-                      const isTopThree = topThreeCellKeys.has(`${dateKey}__${slot.id}`);
-                      const showOwnBlueBorder = activeCalendarView === "all" ? ownDraftSelected : activeCalendarView === savedMyName && ownDraftSelected;
+                      const aggregatedCount = aggregatedCellCountMap[`${dateKey}__${slot.id}`] || 0;
+                      const personSelected = Boolean(viewedPersonAvailability[dateKey]?.includes(slot.id));
+                      const isTopThree = activeCalendarView === "all" && topThreeCellKeys.has(`${dateKey}__${slot.id}`);
+                      const showOwnBlueBorder = canEditCurrentView && ownDraftSelected;
 
-                      const baseClass = !viewedSelected
-                        ? "border border-slate-200 bg-white hover:bg-slate-50"
-                        : activeCalendarView === "all"
-                          ? isTopThree
-                            ? "border border-slate-200 bg-green-600 text-white"
-                            : "border border-slate-200 bg-green-100 text-slate-800"
-                          : "border border-slate-200 bg-blue-50 text-slate-800";
+                      const isFilledInCurrentView = activeCalendarView === "all" ? aggregatedCount > 0 : personSelected;
 
-                      const enhancedClass = showOwnBlueBorder
-                        ? activeCalendarView === "all"
-                          ? isTopThree
-                            ? "border-4 border-blue-500 bg-green-600 text-white"
-                            : viewedSelected
-                              ? "border-2 border-blue-500 bg-green-100 text-slate-800"
-                              : "border-2 border-blue-500 bg-white text-slate-800"
-                          : viewedSelected
-                            ? "border-2 border-blue-500 bg-blue-50 text-slate-800"
-                            : "border-2 border-blue-500 bg-white text-slate-800"
-                        : baseClass;
+                      const filledClass = activeCalendarView === "all"
+                        ? isTopThree
+                          ? "bg-green-600 text-white"
+                          : "bg-green-100 text-slate-800"
+                        : "bg-blue-50 text-slate-800";
+
+                      const borderClass = showOwnBlueBorder
+                        ? activeCalendarView === "all" && isTopThree
+                          ? "border-4 border-blue-500"
+                          : "border-2 border-blue-500"
+                        : "border border-slate-200";
 
                       return (
                         <button
                           key={`${dateKey}-${slot.id}`}
                           onClick={() => toggleCell(dateKey, slot.id)}
-                          className={`relative min-h-[52px] rounded-[14px] px-1 py-1 text-left transition sm:min-h-[68px] sm:rounded-[18px] sm:px-1.5 sm:py-1.5 md:min-h-[82px] md:rounded-[20px] lg:min-h-[112px] lg:rounded-[28px] lg:px-4 lg:py-4 ${enhancedClass}`}
+                          className={`relative min-h-[52px] rounded-[14px] px-1 py-1 text-left transition sm:min-h-[68px] sm:rounded-[18px] sm:px-1.5 sm:py-1.5 md:min-h-[82px] md:rounded-[20px] lg:min-h-[112px] lg:rounded-[28px] lg:px-4 lg:py-4 ${
+                            isFilledInCurrentView ? `${borderClass} ${filledClass}` : `${borderClass} bg-white hover:bg-slate-50 text-slate-800`
+                          }`}
                         >
                           <div className="flex h-full items-end justify-end">
-                            {(viewedSelected || showOwnBlueBorder) ? (
+                            {(activeCalendarView === "all" ? aggregatedCount > 0 : personSelected || showOwnBlueBorder) ? (
                               <Badge
                                 variant="outline"
                                 className={`max-w-full whitespace-nowrap px-1 py-0 text-[9px] font-semibold leading-none sm:px-1.5 sm:py-0.5 sm:text-[11px] md:px-2 md:py-0.5 md:text-xs lg:px-2.5 lg:py-1 lg:text-sm xl:text-base ${
                                   activeCalendarView === "all" && isTopThree ? "border-white/40 bg-white/10 text-white" : "border-slate-200 text-slate-700"
                                 }`}
                               >
-                                {activeCalendarView === "all" ? `${viewCount} / ${participants.length}` : viewedSelected ? "1 / 1" : ""}
+                                {activeCalendarView === "all" ? `${aggregatedCount} / ${participants.length}` : personSelected ? "1 / 1" : ""}
                               </Badge>
                             ) : null}
                           </div>
