@@ -956,7 +956,7 @@ export default function Page() {
                                 variant="outline"
                                 className="max-w-full whitespace-nowrap border-slate-200 px-1 py-0 text-[9px] font-semibold leading-none text-slate-700 sm:px-1.5 sm:py-0.5 sm:text-[11px] md:px-2 md:py-0.5 md:text-xs lg:px-2.5 lg:py-1 lg:text-sm xl:text-base"
                               >
-                                1 / 1
+                                {aggregatedCount} / {participants.length}
                               </Badge>
                             ) : null}
                           </div>
