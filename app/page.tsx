@@ -475,44 +475,50 @@ export default function Page() {
       : viewedParticipantName
         ? `Auswahl von ${viewedParticipantName}`
         : "Persönlicher Kalender";
+async function sendMagicLink(): Promise<void> {
+  const supabase = supabaseRef.current;
+  const trimmedEmail = emailInput.trim();
 
-  async function sendMagicLink(): Promise<void> {
-    const supabase = supabaseRef.current;
-    const trimmedEmail = emailInput.trim();
-
-    if (!supabase) {
-      setAuthMessage("Supabase ist nicht konfiguriert.");
-      return;
-    }
-
-    if (!trimmedEmail) {
-      setAuthMessage("Bitte geben Sie eine E-Mail-Adresse ein.");
-      return;
-    }
-
-    setIsSendingMagicLink(true);
-    setAuthMessage("");
-    setAuthError("");
-
-    try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: trimmedEmail,
-        options: {
-          shouldCreateUser: true,
-          emailRedirectTo: getMagicLinkRedirectUrl(pollId),
-        },
-      });
-
-      if (error) throw error;
-
-      setAuthMessage("Der Magic Link wurde versendet. Bitte prüfen Sie Ihr E-Mail-Postfach.");
-    } catch (error) {
-      console.error(error);
-      setAuthMessage("Der Magic Link konnte nicht gesendet werden.");
-    } finally {
-      setIsSendingMagicLink(false);
-    }
+  if (!supabase) {
+    setAuthMessage("Supabase ist nicht konfiguriert.");
+    return;
   }
+
+  if (!trimmedEmail) {
+    setAuthMessage("Bitte geben Sie eine E-Mail-Adresse ein.");
+    return;
+  }
+
+  setIsSendingMagicLink(true);
+  setAuthMessage("");
+  setAuthError("");
+
+  try {
+    const { error } = await supabase.auth.signInWithOtp({
+      email: trimmedEmail,
+      options: {
+        shouldCreateUser: true,
+        emailRedirectTo: getMagicLinkRedirectUrl(pollId),
+      },
+    });
+
+    if (error) {
+      console.error("Magic link error:", error);
+      setAuthMessage(
+        `Fehler: ${error.code ? `${error.code} – ` : ""}${error.message}`
+      );
+      return;
+    }
+
+    setAuthMessage("Der Magic Link wurde versendet. Bitte prüfen Sie Ihr E-Mail-Postfach.");
+  } catch (error) {
+    console.error("Unexpected magic link error:", error);
+    setAuthMessage("Unerwarteter Fehler beim Versand des Magic Links.");
+  } finally {
+    setIsSendingMagicLink(false);
+  }
+}
+  
 
   async function signOut(): Promise<void> {
     const supabase = supabaseRef.current;
