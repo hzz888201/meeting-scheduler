@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { motion } from "framer-motion";
 import {
@@ -15,30 +14,11 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  UserCheck,
-  Cloud,
   Save,
-  Wifi,
-  WifiOff,
   RefreshCw,
   User,
+  Trash2,
 } from "lucide-react";
-
-/**
- * Vercel-deploybare Version
- *
- * 1. Neues Next.js-Projekt anlegen (App Router)
- * 2. Diese Datei als app/page.tsx speichern
- * 3. Abhängigkeiten installieren:
- *    npm install @supabase/supabase-js framer-motion lucide-react
- * 4. Sicherstellen, dass shadcn/ui-Komponenten vorhanden sind:
- *    card, button, input, badge, checkbox, alert
- * 5. In Vercel oder lokal in .env.local konfigurieren:
- *    NEXT_PUBLIC_SUPABASE_URL=...
- *    NEXT_PUBLIC_SUPABASE_ANON_KEY=...
- * 6. Benötigtes Supabase-SQL siehe unten im Kommentarblock der vorherigen Version
- * 7. In Supabase Auth Anonymous sign-ins aktivieren
- */
 
 type AvailabilityMap = Record<string, Record<string, string[]>>;
 type PersonAvailability = Record<string, string[]>;
@@ -52,9 +32,12 @@ type MeetingRow = {
 };
 
 const TIME_SLOTS = [
-  { id: "morning", label: "Vormittag 09:00–12:00" },
-  { id: "afternoon", label: "Nachmittag 13:00–17:00" },
-  { id: "evening", label: "Abend 18:00–21:00" },
+  { id: "08:00-10:00", label: "08:00–10:00" },
+  { id: "10:00-12:00", label: "10:00–12:00" },
+  { id: "12:00-14:00", label: "12:00–14:00" },
+  { id: "14:00-16:00", label: "14:00–16:00" },
+  { id: "16:00-18:00", label: "16:00–18:00" },
+  { id: "18:00-20:00", label: "18:00–20:00" },
 ] as const;
 
 const WEEKDAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
@@ -74,10 +57,13 @@ function getProfileKey(pollId: string): string {
   return `meeting-scheduler-profile-${pollId}`;
 }
 
+function getMeetingInfoKey(pollId: string): string {
+  return `meeting-scheduler-info-${pollId}`;
+}
+
 function createSupabaseBrowserClient(): SupabaseClient | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
   if (!url || !anonKey) return null;
   return createClient(url, anonKey);
 }
@@ -94,27 +80,6 @@ function formatDateDE(dateKey: string): string {
   const date = new Date(Number(y), Number(m) - 1, Number(d));
   const weekdayMap = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
   return `${d}.${m}.${y} ${weekdayMap[date.getDay()]}`;
-}
-
-function getMonthMatrix(currentMonth: Date): Date[][] {
-  const year = currentMonth.getFullYear();
-  const month = currentMonth.getMonth();
-  const firstDay = new Date(year, month, 1);
-  const firstWeekday = (firstDay.getDay() + 6) % 7;
-  const startDate = new Date(year, month, 1 - firstWeekday);
-  const days: Date[] = [];
-
-  for (let i = 0; i < 42; i += 1) {
-    const date = new Date(startDate);
-    date.setDate(startDate.getDate() + i);
-    days.push(date);
-  }
-
-  const weeks: Date[][] = [];
-  for (let i = 0; i < days.length; i += 7) {
-    weeks.push(days.slice(i, i + 7));
-  }
-  return weeks;
 }
 
 function slotLabelById(slotId: string): string {
@@ -148,6 +113,16 @@ function inflateRowsToAvailability(rows: Array<{ participant_name: string; date_
   return result;
 }
 
+function flattenPersonAvailability(personAvailability: PersonAvailability, participantName: string, ownerUserId: string, pollId: string): MeetingRow[] {
+  return Object.entries(personAvailability).map(([date_key, slots]) => ({
+    poll_id: pollId,
+    participant_name: participantName,
+    owner_user_id: ownerUserId,
+    date_key,
+    slots: [...slots].sort(),
+  }));
+}
+
 function arePersonAvailabilityEqual(a: PersonAvailability, b: PersonAvailability): boolean {
   const aKeys = Object.keys(a).sort();
   const bKeys = Object.keys(b).sort();
@@ -166,45 +141,69 @@ function arePersonAvailabilityEqual(a: PersonAvailability, b: PersonAvailability
   return true;
 }
 
-function flattenPersonAvailability(personAvailability: PersonAvailability, participantName: string, ownerUserId: string, pollId: string): MeetingRow[] {
-  return Object.entries(personAvailability).map(([date_key, slots]) => ({
-    poll_id: pollId,
-    participant_name: participantName,
-    owner_user_id: ownerUserId,
-    date_key,
-    slots: [...slots].sort(),
-  }));
+function getWeekStart(date: Date): Date {
+  const copy = new Date(date);
+  const day = copy.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  copy.setDate(copy.getDate() + diff);
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+}
+
+function getWeekDays(weekStart: Date): Date[] {
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(weekStart);
+    date.setDate(weekStart.getDate() + index);
+    return date;
+  });
+}
+
+function formatWeekRange(weekStart: Date): string {
+  const end = new Date(weekStart);
+  end.setDate(weekStart.getDate() + 6);
+
+  const sameMonth = weekStart.getMonth() === end.getMonth() && weekStart.getFullYear() === end.getFullYear();
+  const startDay = weekStart.getDate();
+  const endDay = end.getDate();
+
+  if (sameMonth) {
+    return `${startDay}.–${endDay}. ${weekStart.toLocaleDateString("de-DE", { month: "long", year: "numeric" })}`;
+  }
+
+  return `${weekStart.toLocaleDateString("de-DE", { day: "numeric", month: "short" })} – ${end.toLocaleDateString("de-DE", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  })}`;
 }
 
 export default function Page() {
   const [pollId, setPollId] = useState(DEFAULT_POLL_ID);
-  const [currentMonth, setCurrentMonth] = useState<Date>(() => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1);
-  });
-  const [selectedDate, setSelectedDate] = useState<string>(formatDateKey(new Date()));
+  const [weekStart, setWeekStart] = useState<Date>(getWeekStart(new Date()));
   const [participantNameInput, setParticipantNameInput] = useState("");
   const [myName, setMyName] = useState("");
   const [savedMyName, setSavedMyName] = useState("");
   const [availability, setAvailability] = useState<AvailabilityMap>({});
   const [draftAvailability, setDraftAvailability] = useState<PersonAvailability>({});
+  const [meetingTitle, setMeetingTitle] = useState("");
+  const [meetingDetails, setMeetingDetails] = useState("");
+  const [participantToDelete, setParticipantToDelete] = useState("");
   const [isDirty, setIsDirty] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
-  const [connectionStatus, setConnectionStatus] = useState<"online" | "local" | "error">("local");
   const [currentUserId, setCurrentUserId] = useState("");
   const [authReady, setAuthReady] = useState(false);
   const [authError, setAuthError] = useState("");
 
   const supabaseRef = useRef<SupabaseClient | null>(null);
   const activeParticipant = savedMyName || myName;
+  const weekDays = useMemo(() => getWeekDays(weekStart), [weekStart]);
 
   useEffect(() => {
     setPollId(getPollId());
     supabaseRef.current = createSupabaseBrowserClient();
-    setConnectionStatus(supabaseRef.current ? "online" : "local");
     setAuthReady(!supabaseRef.current);
   }, []);
 
@@ -228,11 +227,9 @@ export default function Page() {
       .eq("poll_id", pollId);
 
     if (error) {
-      setConnectionStatus("error");
       setSaveMessage("Online-Daten konnten nicht geladen werden. Bitte Supabase-Konfiguration, RLS oder Netzwerk prüfen.");
     } else {
       setAvailability(inflateRowsToAvailability((data || []) as Array<{ participant_name: string; date_key: string; slots: string[] }>));
-      setConnectionStatus("online");
     }
 
     if (showRefreshing) setIsRefreshing(false);
@@ -249,10 +246,15 @@ export default function Page() {
         const profileRaw = localStorage.getItem(getProfileKey(pollId));
         const profile = profileRaw ? JSON.parse(profileRaw) : {};
         const cachedName = profile.myName || "";
+        const infoRaw = localStorage.getItem(getMeetingInfoKey(pollId));
+        const info = infoRaw ? JSON.parse(infoRaw) : {};
+
         if (!ignore) {
           setMyName(cachedName);
           setSavedMyName(cachedName);
           setParticipantNameInput(cachedName);
+          setMeetingTitle(info.meetingTitle || "");
+          setMeetingDetails(info.meetingDetails || "");
         }
       }
 
@@ -265,7 +267,6 @@ export default function Page() {
 
         if (sessionError) {
           if (!ignore) {
-            setConnectionStatus("error");
             setSaveMessage("Anmeldestatus konnte nicht gelesen werden. Bitte Supabase Auth prüfen.");
             setAuthError("Anmeldestatus konnte nicht gelesen werden. Bitte Supabase Auth prüfen.");
             setAuthReady(false);
@@ -279,7 +280,6 @@ export default function Page() {
           const { data: anonData, error: anonError } = await supabase.auth.signInAnonymously();
           if (anonError) {
             if (!ignore) {
-              setConnectionStatus("error");
               setSaveMessage("Anonyme Anmeldung fehlgeschlagen. Bitte Anonymous Sign-ins in Supabase Auth aktivieren.");
               setAuthError("Anonyme Anmeldung fehlgeschlagen. Bitte Anonymous Sign-ins in Supabase Auth aktivieren.");
               setAuthReady(false);
@@ -312,6 +312,11 @@ export default function Page() {
     if (!pollId || typeof window === "undefined") return;
     localStorage.setItem(getProfileKey(pollId), JSON.stringify({ myName }));
   }, [myName, pollId]);
+
+  useEffect(() => {
+    if (!pollId || typeof window === "undefined") return;
+    localStorage.setItem(getMeetingInfoKey(pollId), JSON.stringify({ meetingTitle, meetingDetails }));
+  }, [meetingTitle, meetingDetails, pollId]);
 
   useEffect(() => {
     if (!savedMyName) {
@@ -348,20 +353,16 @@ export default function Page() {
           await fetchAllAvailability(false);
         }
       )
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") setConnectionStatus("online");
-      });
+      .subscribe();
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       setCurrentUserId(session?.user?.id || "");
       setAuthReady(Boolean(session?.user?.id));
-      if (session?.user?.id) {
-        setAuthError("");
-      }
+      if (session?.user?.id) setAuthError("");
       if (event === "SIGNED_OUT") {
-        setSaveMessage("Anmeldestatus ist abgelaufen. Bitte Seite neu laden, damit die anonyme Anmeldung erneut durchgeführt wird.");
+        setSaveMessage("Die Sitzung ist abgelaufen. Bitte Seite neu laden.");
       }
     });
 
@@ -372,64 +373,36 @@ export default function Page() {
   }, [pollId]);
 
   const participants = useMemo(() => Object.keys(availability).sort(), [availability]);
-  const monthLabel = `${currentMonth.getFullYear()} ${currentMonth.toLocaleDateString("de-DE", { month: "long" })}`;
-  const weeks = useMemo(() => getMonthMatrix(currentMonth), [currentMonth]);
-  const selectedSlots = draftAvailability[selectedDate] || [];
+  const weekRangeLabel = useMemo(() => formatWeekRange(weekStart), [weekStart]);
 
-  const allDateSlotKeys = useMemo(() => {
-    const keys = new Set<string>();
+  const cellCountMap = useMemo(() => {
+    const map: Record<string, number> = {};
     Object.values(availability).forEach((personData) => {
-      Object.entries(personData || {}).forEach(([dateKey, slots]) => {
-        (slots || []).forEach((slot) => keys.add(`${dateKey}__${slot}`));
+      Object.entries(personData).forEach(([dateKey, slots]) => {
+        slots.forEach((slotId) => {
+          const key = `${dateKey}__${slotId}`;
+          map[key] = (map[key] || 0) + 1;
+        });
       });
     });
-    return Array.from(keys).sort();
+    return map;
   }, [availability]);
 
   const commonSlots = useMemo(() => {
-    if (participants.length === 0) return [] as Array<{ dateKey: string; slotId: string; slotLabel: string }>;
+    if (participants.length === 0) return [] as Array<{ dateKey: string; slotId: string; label: string }>;
 
-    return allDateSlotKeys
-      .filter((key) => {
-        const [dateKey, slotId] = key.split("__");
-        return participants.every((person) => {
-          const personSlots = availability[person]?.[dateKey] || [];
-          return personSlots.includes(slotId);
-        });
-      })
-      .map((key) => {
-        const [dateKey, slotId] = key.split("__");
-        return { dateKey, slotId, slotLabel: slotLabelById(slotId) };
+    const result: Array<{ dateKey: string; slotId: string; label: string }> = [];
+    weekDays.forEach((day) => {
+      const dateKey = formatDateKey(day);
+      TIME_SLOTS.forEach((slot) => {
+        const everyoneFree = participants.every((person) => (availability[person]?.[dateKey] || []).includes(slot.id));
+        if (everyoneFree) {
+          result.push({ dateKey, slotId: slot.id, label: slot.label });
+        }
       });
-  }, [allDateSlotKeys, availability, participants]);
-
-  const participantCountPerSlot = useMemo(() => {
-    const map: Record<string, number> = {};
-    allDateSlotKeys.forEach((key) => {
-      const [dateKey, slotId] = key.split("__");
-      map[key] = participants.filter((person) => (availability[person]?.[dateKey] || []).includes(slotId)).length;
     });
-    return map;
-  }, [allDateSlotKeys, availability, participants]);
-
-  const participantSelections = useMemo(() => {
-    return participants.map((name) => {
-      const personData = availability[name] || {};
-      const entries = Object.entries(personData)
-        .filter(([, slots]) => Array.isArray(slots) && slots.length > 0)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([dateKey, slots]) => ({
-          dateKey,
-          labels: [...slots].sort().map((slotId) => slotLabelById(slotId)),
-        }));
-
-      return {
-        name,
-        entries,
-        totalCount: entries.reduce((sum, item) => sum + item.labels.length, 0),
-      };
-    });
-  }, [availability, participants]);
+    return result;
+  }, [availability, participants, weekDays]);
 
   function registerMe(): void {
     const trimmed = participantNameInput.trim();
@@ -439,32 +412,27 @@ export default function Page() {
     setSaveMessage(`Du bearbeitest jetzt die Verfügbarkeit von ${trimmed}.`);
   }
 
-  function toggleSlot(slotId: string): void {
-    if (!activeParticipant) return;
+  function toggleCell(dateKey: string, slotId: string): void {
+    if (!activeParticipant) {
+      setSaveMessage("Bitte zuerst deinen Namen bestätigen.");
+      return;
+    }
+
     const next = { ...draftAvailability };
-    const existing = next[selectedDate] || [];
+    const existing = next[dateKey] || [];
     const updated = existing.includes(slotId)
       ? existing.filter((s) => s !== slotId)
       : [...existing, slotId];
 
     if (updated.length === 0) {
-      delete next[selectedDate];
+      delete next[dateKey];
     } else {
-      next[selectedDate] = [...updated].sort();
+      next[dateKey] = [...updated].sort();
     }
 
     setDraftAvailability(normalizePersonAvailability(next));
     setIsDirty(true);
-    setSaveMessage("Es gibt ungespeicherte Änderungen. Gespeichert werden nur deine eigenen Zeiten.");
-  }
-
-  function clearSelectedDateForParticipant(): void {
-    if (!activeParticipant) return;
-    const next = { ...draftAvailability };
-    delete next[selectedDate];
-    setDraftAvailability(normalizePersonAvailability(next));
-    setIsDirty(true);
-    setSaveMessage("Die Auswahl für dieses Datum wurde gelöscht. Bitte anschließend speichern.");
+    setSaveMessage("Die Kalenderauswahl wurde geändert. Bitte speichern.");
   }
 
   async function saveMyAvailability(): Promise<void> {
@@ -519,13 +487,11 @@ export default function Page() {
         }
 
         await fetchAllAvailability(false);
-        setConnectionStatus("online");
       } else {
         setAvailability((prev) => ({
           ...prev,
           [trimmedName]: normalizedDraft,
         }));
-        setConnectionStatus("local");
       }
 
       setSavedMyName(trimmedName);
@@ -535,7 +501,6 @@ export default function Page() {
       setSaveMessage("Deine Verfügbarkeit wurde gespeichert.");
     } catch (error) {
       console.error(error);
-      setConnectionStatus(supabase ? "error" : "local");
       setSaveMessage("Speichern fehlgeschlagen. Bitte Tabellenstruktur, RLS-Policy, anonyme Anmeldung und Netzwerk prüfen.");
     } finally {
       setIsSaving(false);
@@ -581,86 +546,119 @@ export default function Page() {
     }
   }
 
-  function goPrevMonth(): void {
-    setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+  async function deleteParticipantAsHost(): Promise<void> {
+    if (!participantToDelete) {
+      setSaveMessage("Bitte zuerst eine teilnehmende Person auswählen.");
+      return;
+    }
+
+    const supabase = supabaseRef.current;
+
+    try {
+      if (supabase) {
+        const { error } = await supabase
+          .from("meeting_availability")
+          .delete()
+          .eq("poll_id", pollId)
+          .eq("participant_name", participantToDelete);
+
+        if (error) throw error;
+        await fetchAllAvailability(false);
+      } else {
+        setAvailability((prev) => {
+          const next = { ...prev };
+          delete next[participantToDelete];
+          return next;
+        });
+      }
+
+      if (savedMyName === participantToDelete) {
+        setDraftAvailability({});
+        setIsDirty(false);
+      }
+
+      setParticipantToDelete("");
+      setSaveMessage("Die ausgewählte teilnehmende Person wurde entfernt.");
+    } catch (error) {
+      console.error(error);
+      setSaveMessage("Das Löschen anderer Teilnehmender wurde blockiert. Dafür ist eine Host-Berechtigung im Backend oder eine angepasste RLS-Policy erforderlich.");
+    }
   }
 
-  function goNextMonth(): void {
-    setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
-  }
-
-  function getHeatForDay(dateKey: string): number {
-    if (participants.length === 0) return 0;
-    let maxMatched = 0;
-    TIME_SLOTS.forEach((slot) => {
-      const count = participants.filter((p) => (availability[p]?.[dateKey] || []).includes(slot.id)).length;
-      if (count > maxMatched) maxMatched = count;
+  function goPrevWeek(): void {
+    setWeekStart((prev) => {
+      const next = new Date(prev);
+      next.setDate(prev.getDate() - 7);
+      return next;
     });
-    return maxMatched;
   }
 
-  const todayKey = formatDateKey(new Date());
+  function goNextWeek(): void {
+    setWeekStart((prev) => {
+      const next = new Date(prev);
+      next.setDate(prev.getDate() + 7);
+      return next;
+    });
+  }
+
+  function goToCurrentWeek(): void {
+    setWeekStart(getWeekStart(new Date()));
+  }
+
   const mySavedAvailability = savedMyName ? normalizePersonAvailability(availability[savedMyName] || {}) : {};
   const hasServerDiff = savedMyName ? !arePersonAvailabilityEqual(mySavedAvailability, draftAvailability) : false;
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8">
       <div className="mx-auto max-w-7xl space-y-6">
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="grid gap-4 md:grid-cols-3">
-          <Card className="rounded-2xl shadow-sm md:col-span-2">
+        <div className="flex items-start justify-between gap-4">
+          <Card className="flex-1 rounded-2xl shadow-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-2xl">
                 <CalendarDays className="h-6 w-6" />
-                Team-Terminabstimmung
+                Meeting-Informationen
               </CardTitle>
               <p className="text-sm text-slate-600">
-                Jede Person bearbeitet und speichert nur ihre eigene Verfügbarkeit. Die Seite meldet sich anonym bei Supabase an und synchronisiert die Daten in Echtzeit.
+                Hier kann der Host Informationen zum Termin eintragen. Die Informationen werden aktuell im Browser des Hosts gespeichert.
               </p>
             </CardHeader>
-          </Card>
-
-          <Card className="rounded-2xl shadow-sm">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Cloud className="h-5 w-5" />
-                Synchronisationsstatus
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center gap-2 text-sm">
-                {connectionStatus === "online" ? (
-                  <>
-                    <Wifi className="h-4 w-4" />
-                    <span>Echtzeit-Synchronisierung aktiv</span>
-                  </>
-                ) : connectionStatus === "local" ? (
-                  <>
-                    <WifiOff className="h-4 w-4" />
-                    <span>Lokaler Demo-Modus</span>
-                  </>
-                ) : (
-                  <>
-                    <WifiOff className="h-4 w-4" />
-                    <span>Verbindung fehlerhaft</span>
-                  </>
-                )}
+            <CardContent className="space-y-4">
+              <Input value={meetingTitle} onChange={(e) => setMeetingTitle(e.target.value)} placeholder="Titel des Meetings" />
+              <textarea
+                value={meetingDetails}
+                onChange={(e) => setMeetingDetails(e.target.value)}
+                placeholder="Beschreibung, Agenda, Link, Ort oder weitere Hinweise"
+                className="min-h-[120px] w-full rounded-xl border border-slate-200 bg-white p-3 text-sm outline-none ring-0 transition focus:border-slate-300"
+              />
+              <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-center">
+                <div>
+                  <div className="mb-2 text-sm font-medium text-slate-700">Teilnehmende Person als Host entfernen</div>
+                  <select
+                    value={participantToDelete}
+                    onChange={(e) => setParticipantToDelete(e.target.value)}
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none"
+                  >
+                    <option value="">Teilnehmende Person auswählen</option>
+                    {participants.map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <Button variant="destructive" className="gap-2 md:self-end" onClick={() => void deleteParticipantAsHost()}>
+                  <Trash2 className="h-4 w-4" />
+                  Person löschen
+                </Button>
               </div>
-
-              <div className="rounded-xl bg-slate-100 p-3 text-sm text-slate-600">
-                Poll ID: <span className="font-semibold">{pollId}</span>
-              </div>
-
-              <div className="rounded-xl bg-slate-100 p-3 text-sm text-slate-600">
-                Aktuelle Identität: <span className="font-semibold">{authReady && currentUserId ? `${currentUserId.slice(0, 8)}…` : authError ? "Anmeldung fehlgeschlagen" : "Nicht bereit"}</span>
-              </div>
-
-              <Button variant="outline" className="w-full gap-2" onClick={() => void fetchAllAvailability(true)} disabled={isRefreshing || isLoading}>
-                <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
-                {isRefreshing ? "Wird aktualisiert…" : "Online-Daten aktualisieren"}
-              </Button>
             </CardContent>
           </Card>
-        </motion.div>
+
+          <Button variant="outline" className="gap-2" onClick={() => void fetchAllAvailability(true)} disabled={isRefreshing || isLoading}>
+            <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />
+            {isRefreshing ? "Wird aktualisiert…" : "Aktualisieren"}
+          </Button>
+        </div>
 
         {!supabaseRef.current && (
           <Alert className="rounded-2xl border-amber-200 bg-amber-50">
@@ -670,188 +668,154 @@ export default function Page() {
           </Alert>
         )}
 
-        <div className="grid gap-6 lg:grid-cols-[1.3fr_0.9fr]">
+        <div className="grid gap-6 lg:grid-cols-[0.95fr_1.45fr]">
           <Card className="rounded-2xl shadow-sm">
             <CardHeader>
-              <div className="flex items-center justify-between gap-2">
-                <CardTitle className="text-xl">Datum wählen</CardTitle>
+              <CardTitle className="flex items-center gap-2 text-xl">
+                <User className="h-5 w-5" />
+                Meine Teilnahme
+              </CardTitle>
+              <p className="text-sm text-slate-600">Name bestätigen und anschließend Zeitfenster direkt im Wochenkalender anklicken.</p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-2">
+                <Input value={participantNameInput} onChange={(e) => setParticipantNameInput(e.target.value)} placeholder="Deinen Namen eingeben" onKeyDown={(e) => e.key === "Enter" && registerMe()} />
+                <Button onClick={registerMe}>Bestätigen</Button>
+              </div>
+
+              {savedMyName ? (
+                <div className="rounded-xl bg-slate-100 p-3 text-sm text-slate-700">
+                  Aktuelle Person: <span className="font-semibold">{savedMyName}</span>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed p-4 text-sm text-slate-500">Bitte zuerst einen Namen bestätigen.</div>
+              )}
+
+              <div className="flex flex-wrap gap-2">
+                <Button className="gap-2" onClick={() => void saveMyAvailability()} disabled={isSaving || !savedMyName || !isDirty}>
+                  <Save className="h-4 w-4" />
+                  {isSaving ? "Wird gespeichert…" : "Meine Auswahl speichern"}
+                </Button>
+                <Button variant="outline" onClick={() => void removeMyAvailability()} disabled={isSaving || !savedMyName}>
+                  Meine Auswahl löschen
+                </Button>
+              </div>
+
+              {isLoading ? (
+                <div className="rounded-xl border border-dashed p-4 text-sm text-slate-500">Daten und anonyme Anmeldung werden vorbereitet…</div>
+              ) : supabaseRef.current && !authReady ? (
+                <div className="rounded-xl border border-dashed p-4 text-sm text-amber-700">
+                  {authError || "Die anonyme Anmeldung ist noch nicht bereit. Bitte Supabase Auth prüfen und die Seite neu laden."}
+                </div>
+              ) : null}
+
+              {hasServerDiff && !isDirty && (
+                <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800">Der lokale Entwurf weicht von den Serverdaten ab. Bitte erneut auswählen und speichern.</div>
+              )}
+
+              {saveMessage && <div className="rounded-xl bg-slate-100 p-3 text-sm text-slate-600">{saveMessage}</div>}
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-2xl shadow-sm">
+            <CardHeader>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <CardTitle className="text-xl">Wochenkalender</CardTitle>
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" size="icon" onClick={goPrevMonth}>
+                  <Button variant="outline" size="icon" onClick={goPrevWeek}>
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
-                  <div className="min-w-[150px] text-center font-medium capitalize">{monthLabel}</div>
-                  <Button variant="outline" size="icon" onClick={goNextMonth}>
+                  <Button variant="outline" onClick={goToCurrentWeek}>Heute</Button>
+                  <Button variant="outline" size="icon" onClick={goNextWeek}>
                     <ChevronRight className="h-4 w-4" />
                   </Button>
+                  <div className="min-w-[180px] text-center font-medium">{weekRangeLabel}</div>
                 </div>
               </div>
+              <p className="text-sm text-slate-600">Ein Klick markiert ein Zeitfenster blau. Ein weiterer Klick entfernt die Auswahl wieder.</p>
             </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-7 gap-2 text-center text-sm text-slate-500">
-                {WEEKDAYS.map((day) => (
-                  <div key={day} className="py-2 font-medium">
-                    {day}
-                  </div>
-                ))}
-              </div>
-              <div className="mt-2 grid gap-2">
-                {weeks.map((week, i) => (
-                  <div key={String(i)} className="grid grid-cols-7 gap-2">
-                    {week.map((date) => {
-                      const dateKey = formatDateKey(date);
-                      const inCurrentMonth = date.getMonth() === currentMonth.getMonth();
-                      const isSelected = dateKey === selectedDate;
-                      const isToday = dateKey === todayKey;
-                      const heat = getHeatForDay(dateKey);
-                      const hasOwnSelection = Boolean((draftAvailability[dateKey] || []).length);
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-[110px_repeat(7,minmax(0,1fr))] gap-2">
+                <div />
+                {weekDays.map((day, index) => {
+                  const dateKey = formatDateKey(day);
+                  const hasOwnSelection = Boolean((draftAvailability[dateKey] || []).length);
+                  const isToday = formatDateKey(day) === formatDateKey(new Date());
+
+                  return (
+                    <div
+                      key={dateKey}
+                      className={`rounded-2xl border p-3 text-center ${hasOwnSelection ? "border-blue-200 bg-blue-50" : "border-slate-200 bg-white"}`}
+                    >
+                      <div className="text-xs uppercase tracking-wide text-slate-500">{WEEKDAYS[index]}</div>
+                      <div className={`mt-1 text-2xl font-semibold ${hasOwnSelection ? "text-blue-700" : "text-slate-800"}`}>{day.getDate()}</div>
+                      {isToday && <div className="mt-1 text-xs text-slate-500">Heute</div>}
+                    </div>
+                  );
+                })}
+
+                {TIME_SLOTS.map((slot) => (
+                  <React.Fragment key={slot.id}>
+                    <div className="flex items-center rounded-2xl border border-slate-200 bg-white px-3 py-4 text-sm font-medium text-slate-700">
+                      {slot.label}
+                    </div>
+                    {weekDays.map((day) => {
+                      const dateKey = formatDateKey(day);
+                      const selected = (draftAvailability[dateKey] || []).includes(slot.id);
+                      const count = cellCountMap[`${dateKey}__${slot.id}`] || 0;
 
                       return (
                         <button
-                          key={dateKey}
-                          onClick={() => setSelectedDate(dateKey)}
-                          className={`min-h-[84px] rounded-2xl border p-2 text-left transition hover:shadow-sm ${
-                            isSelected
-                              ? "border-2 border-emerald-500 ring-2 ring-emerald-100"
-                              : hasOwnSelection
-                                ? "border-blue-200 bg-blue-50"
-                                : "border-slate-200 bg-white"
-                          } ${!inCurrentMonth ? "opacity-40" : "opacity-100"}`}
+                          key={`${dateKey}-${slot.id}`}
+                          onClick={() => toggleCell(dateKey, slot.id)}
+                          className={`min-h-[88px] rounded-2xl border p-3 text-left transition ${
+                            selected ? "border-blue-400 bg-blue-500 text-white hover:bg-blue-500" : "border-slate-200 bg-white hover:bg-slate-50"
+                          }`}
                         >
-                          <div className="flex items-center justify-between">
-                            <span className={`text-sm font-medium ${hasOwnSelection ? "text-blue-700" : "text-slate-900"}`}>{date.getDate()}</span>
-                            <div className="flex items-center gap-1">
-                              {isToday && <Badge variant="secondary">Heute</Badge>}
-                              {heat > 0 && <Badge variant="outline">{heat} frei</Badge>}
-                            </div>
+                          <div className="flex items-start justify-between gap-2">
+                            <span className={`text-sm font-medium ${selected ? "text-white" : "text-slate-700"}`}>{slot.label}</span>
+                            <Badge variant="outline" className={selected ? "border-white/40 bg-white/10 text-white" : "border-slate-200 text-slate-700"}>
+                              {count}
+                            </Badge>
                           </div>
-                          <div className="mt-3 space-y-1">
-                            {TIME_SLOTS.map((slot) => {
-                              const key = `${dateKey}__${slot.id}`;
-                              const count = participantCountPerSlot[key] || 0;
-                              if (count === 0) return null;
-                              return (
-                                <div key={slot.id} className="text-[11px] text-slate-700">
-                                  {slot.label.split(" ")[0]}: {count}/{participants.length || 0}
-                                </div>
-                              );
-                            })}
+                          <div className={`mt-4 text-xs ${selected ? "text-blue-100" : "text-slate-500"}`}>
+                            {count === 1 ? "1 Person" : `${count} Personen`}
                           </div>
                         </button>
                       );
                     })}
-                  </div>
+                  </React.Fragment>
                 ))}
               </div>
             </CardContent>
           </Card>
-
-          <div className="space-y-6">
-            <Card className="rounded-2xl shadow-sm">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-xl">
-                  <User className="h-5 w-5" />
-                  Meine Eingabe
-                </CardTitle>
-                <p className="text-sm text-slate-600">Zuerst den angezeigten Namen eingeben. Die Schreibrechte werden über die anonyme Supabase-Anmeldung gesteuert.</p>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex gap-2">
-                  <Input value={participantNameInput} onChange={(e) => setParticipantNameInput(e.target.value)} placeholder="Deinen Namen eingeben" onKeyDown={(e) => e.key === "Enter" && registerMe()} />
-                  <Button onClick={registerMe}>Name bestätigen</Button>
-                </div>
-
-                {savedMyName ? (
-                  <div className="rounded-xl bg-slate-100 p-3 text-sm text-slate-700">
-                    Aktuelle Person: <span className="font-semibold">{savedMyName}</span>
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-dashed p-4 text-sm text-slate-500">Bitte zuerst einen Namen bestätigen.</div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card className="rounded-2xl shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-xl">Verfügbarkeit eintragen</CardTitle>
-                <p className="text-sm text-slate-600">Aktuelles Datum: {formatDateDE(selectedDate)}</p>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {isLoading ? (
-                  <div className="rounded-xl border border-dashed p-4 text-sm text-slate-500">Daten und anonyme Anmeldung werden vorbereitet…</div>
-                ) : supabaseRef.current && !authReady ? (
-                  <div className="rounded-xl border border-dashed p-4 text-sm text-amber-700">
-                    {authError || "Die anonyme Anmeldung ist noch nicht bereit. Bitte Supabase Auth prüfen und die Seite neu laden."}
-                  </div>
-                ) : !savedMyName ? (
-                  <div className="rounded-xl border border-dashed p-4 text-sm text-slate-500">Bitte zuerst deinen Namen bestätigen.</div>
-                ) : (
-                  <>
-                    <div className="space-y-3">
-                      {TIME_SLOTS.map((slot) => {
-                        const checked = selectedSlots.includes(slot.id);
-                        return (
-                          <label key={slot.id} className="flex cursor-pointer items-center justify-between rounded-xl border p-3 hover:bg-slate-50">
-                            <div>
-                              <div className="font-medium">{slot.label}</div>
-                              <div className="text-sm text-slate-500">Diese Zeitspanne ankreuzen, wenn du verfügbar bist.</div>
-                            </div>
-                            <Checkbox checked={checked} onCheckedChange={() => toggleSlot(slot.id)} />
-                          </label>
-                        );
-                      })}
-                    </div>
-
-                    <div className="flex gap-2">
-                      <Button variant="outline" className="flex-1" onClick={clearSelectedDateForParticipant}>
-                        Auswahl für diesen Tag löschen
-                      </Button>
-                      <Button variant="destructive" className="flex-1" onClick={() => void removeMyAvailability()} disabled={isSaving || !savedMyName}>
-                        Alle meine Zeiten löschen
-                      </Button>
-                    </div>
-
-                    <Button className="w-full gap-2" onClick={() => void saveMyAvailability()} disabled={isSaving || !savedMyName || !isDirty}>
-                      <Save className="h-4 w-4" />
-                      {isSaving ? "Wird gespeichert…" : isDirty ? "Meine Auswahl speichern" : "Gespeichert"}
-                    </Button>
-
-                    {hasServerDiff && !isDirty && (
-                      <div className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800">Der lokale Entwurf weicht von den Serverdaten ab. Bitte Auswahl prüfen und erneut speichern.</div>
-                    )}
-                  </>
-                )}
-
-                {saveMessage && <div className="rounded-xl bg-slate-100 p-3 text-sm text-slate-600">{saveMessage}</div>}
-              </CardContent>
-            </Card>
-
-            <Card className="rounded-2xl shadow-sm">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-xl">
-                  <CheckCircle2 className="h-5 w-5" />
-                  Automatisch gefundene gemeinsame Zeiten
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {participants.length === 0 ? (
-                  <p className="text-sm text-slate-500">Es wurden noch keine Zeiten gespeichert.</p>
-                ) : commonSlots.length === 0 ? (
-                  <div className="rounded-xl border border-dashed p-4 text-sm text-slate-500">Derzeit wurde noch kein gemeinsamer Termin für alle gefunden.</div>
-                ) : (
-                  <div className="space-y-3">
-                    {commonSlots.map((item) => (
-                      <motion.div key={`${item.dateKey}-${item.slotId}`} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="rounded-xl border bg-slate-50 p-3">
-                        <div className="font-medium">{formatDateDE(item.dateKey)}</div>
-                        <div className="mt-1 text-sm text-slate-600">{item.slotLabel}</div>
-                        <div className="mt-2 text-xs text-slate-500">Alle {participants.length} gespeicherten Teilnehmenden sind verfügbar.</div>
-                      </motion.div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
         </div>
+
+        <Card className="rounded-2xl shadow-sm">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <CheckCircle2 className="h-5 w-5" />
+              Gemeinsame Zeitfenster in dieser Woche
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {participants.length === 0 ? (
+              <div className="rounded-xl border border-dashed p-4 text-sm text-slate-500">Noch keine gespeicherten Teilnehmenden vorhanden.</div>
+            ) : commonSlots.length === 0 ? (
+              <div className="rounded-xl border border-dashed p-4 text-sm text-slate-500">Für diese Woche wurde noch kein gemeinsames Zeitfenster für alle gefunden.</div>
+            ) : (
+              <div className="space-y-3">
+                {commonSlots.map((item) => (
+                  <motion.div key={`${item.dateKey}-${item.slotId}`} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="rounded-xl border bg-slate-50 p-3">
+                    <div className="font-medium">{formatDateDE(item.dateKey)}</div>
+                    <div className="mt-1 text-sm text-slate-600">{item.label}</div>
+                    <div className="mt-2 text-xs text-slate-500">Alle {participants.length} Teilnehmenden haben dieses Zeitfenster gewählt.</div>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         <Card className="rounded-2xl shadow-sm">
           <CardHeader>
@@ -869,51 +833,6 @@ export default function Page() {
                   <Badge key={name} variant={name === savedMyName ? "default" : "secondary"}>
                     {name}
                   </Badge>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-2xl shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-xl">
-              <UserCheck className="h-5 w-5" />
-              Gespeicherte Verfügbarkeiten
-            </CardTitle>
-            <p className="text-sm text-slate-600">Hier werden nur die bereits im System gespeicherten Daten angezeigt.</p>
-          </CardHeader>
-          <CardContent>
-            {participants.length === 0 ? (
-              <div className="rounded-xl border border-dashed p-4 text-sm text-slate-500">Noch keine gespeicherten Verfügbarkeiten vorhanden.</div>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {participantSelections.map((person) => (
-                  <div key={person.name} className="rounded-2xl border bg-white p-4 shadow-sm">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-base font-semibold">{person.name}</div>
-                      <Badge variant="secondary">{person.totalCount} Einträge</Badge>
-                    </div>
-
-                    {person.entries.length === 0 ? (
-                      <div className="mt-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-500">Für diese Person wurden noch keine Zeiten gespeichert.</div>
-                    ) : (
-                      <div className="mt-4 space-y-3">
-                        {person.entries.map((entry) => (
-                          <div key={`${person.name}-${entry.dateKey}`} className="rounded-xl bg-slate-50 p-3">
-                            <div className="text-sm font-medium">{formatDateDE(entry.dateKey)}</div>
-                            <div className="mt-2 flex flex-wrap gap-2">
-                              {entry.labels.map((label) => (
-                                <Badge key={`${entry.dateKey}-${label}`} variant="outline">
-                                  {label}
-                                </Badge>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
                 ))}
               </div>
             )}
