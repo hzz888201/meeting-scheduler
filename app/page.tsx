@@ -373,6 +373,28 @@ export default function Page() {
     });
   }, [cellCountMap, participants.length, weekDays]);
 
+  const topThreeCellKeys = useMemo(() => {
+    const ranked = weekDays
+      .flatMap((day) => {
+        const dateKey = formatDateKey(day);
+        return TIME_SLOTS.map((slot) => ({
+          key: `${dateKey}__${slot.id}`,
+          dateKey,
+          slotId: slot.id,
+          count: cellCountMap[`${dateKey}__${slot.id}`] || 0,
+        }));
+      })
+      .filter((item) => item.count > 0)
+      .sort((a, b) => {
+        if (b.count !== a.count) return b.count - a.count;
+        if (a.dateKey !== b.dateKey) return a.dateKey.localeCompare(b.dateKey);
+        return a.slotId.localeCompare(b.slotId);
+      })
+      .slice(0, 3);
+
+    return new Set(ranked.map((item) => item.key));
+  }, [cellCountMap, weekDays]);
+
   function registerMe(): void {
     const trimmed = participantNameInput.trim();
     if (!trimmed) return;
@@ -586,17 +608,36 @@ export default function Page() {
                     const dateKey = formatDateKey(day);
                     const selected = (draftAvailability[dateKey] || []).includes(slot.id);
                     const count = cellCountMap[`${dateKey}__${slot.id}`] || 0;
+                    const hasAnySelection = count > 0;
+                    const isTopThree = topThreeCellKeys.has(`${dateKey}__${slot.id}`);
 
                     return (
                       <button
                         key={`${dateKey}-${slot.id}`}
                         onClick={() => toggleCell(dateKey, slot.id)}
-                        className={`min-h-[88px] rounded-2xl border p-3 text-left transition ${selected ? "border-blue-400 bg-blue-500 text-white hover:bg-blue-500" : "border-slate-200 bg-white hover:bg-slate-50"}`}
+                        className={`min-h-[88px] rounded-2xl border p-3 text-left transition ${
+                          isTopThree
+                            ? "border-green-400 bg-green-500 text-white hover:bg-green-500"
+                            : selected
+                              ? "border-blue-400 bg-blue-500 text-white hover:bg-blue-500"
+                              : "border-slate-200 bg-white hover:bg-slate-50"
+                        }`}
                       >
                         <div className="flex h-full items-end justify-end">
-                          <Badge variant="outline" className={selected ? "border-white/40 bg-white/10 text-white" : "border-slate-200 text-slate-700"}>
-                            {count} / {participants.length}
-                          </Badge>
+                          {hasAnySelection ? (
+                            <Badge
+                              variant="outline"
+                              className={
+                                isTopThree
+                                  ? "border-white/40 bg-white/10 text-white"
+                                  : selected
+                                    ? "border-white/40 bg-white/10 text-white"
+                                    : "border-slate-200 text-slate-700"
+                              }
+                            >
+                              {count} / {participants.length}
+                            </Badge>
+                          ) : null}
                         </div>
                       </button>
                     );
