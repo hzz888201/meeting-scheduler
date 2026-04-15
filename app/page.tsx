@@ -12,6 +12,7 @@ import { Users, CheckCircle2, ChevronLeft, ChevronRight, Save, RefreshCw } from 
 
 type AvailabilityMap = Record<string, Record<string, string[]>>;
 type PersonAvailability = Record<string, string[]>;
+type CalendarView = "all" | string;
 
 type MeetingRow = {
   poll_id: string;
@@ -73,16 +74,19 @@ function formatDateDE(dateKey: string): string {
 function normalizePersonAvailability(input: unknown): PersonAvailability {
   if (!input || typeof input !== "object") return {};
   const next: PersonAvailability = {};
+
   Object.entries(input as Record<string, unknown>).forEach(([dateKey, slots]) => {
     if (!Array.isArray(slots)) return;
     const cleaned = Array.from(new Set(slots.filter(Boolean))).sort() as string[];
     if (cleaned.length > 0) next[dateKey] = cleaned;
   });
+
   return next;
 }
 
 function inflateRowsToAvailability(rows: Array<{ participant_name: string; date_key: string; slots: string[] }>): AvailabilityMap {
   const result: AvailabilityMap = {};
+
   rows.forEach((row) => {
     if (!row?.participant_name || !row?.date_key) return;
     if (!result[row.participant_name]) result[row.participant_name] = {};
@@ -90,6 +94,7 @@ function inflateRowsToAvailability(rows: Array<{ participant_name: string; date_
       ? Array.from(new Set(row.slots)).sort()
       : [];
   });
+
   return result;
 }
 
@@ -107,6 +112,7 @@ function arePersonAvailabilityEqual(a: PersonAvailability, b: PersonAvailability
   const aKeys = Object.keys(a).sort();
   const bKeys = Object.keys(b).sort();
   if (aKeys.length !== bKeys.length) return false;
+
   for (let i = 0; i < aKeys.length; i += 1) {
     if (aKeys[i] !== bKeys[i]) return false;
     const aSlots = [...(a[aKeys[i]] || [])].sort();
@@ -116,14 +122,14 @@ function arePersonAvailabilityEqual(a: PersonAvailability, b: PersonAvailability
       if (aSlots[j] !== bSlots[j]) return false;
     }
   }
+
   return true;
 }
 
 function getWeekStart(date: Date): Date {
   const copy = new Date(date);
   const day = copy.getDay();
-  const diff = -day;
-  copy.setDate(copy.getDate() + diff);
+  copy.setDate(copy.getDate() - day);
   copy.setHours(0, 0, 0, 0);
   return copy;
 }
@@ -142,9 +148,11 @@ function formatWeekRange(weekStart: Date): string {
   const startMonth = weekStart.toLocaleDateString("de-DE", { month: "long" });
   const endMonth = end.toLocaleDateString("de-DE", { month: "long" });
   const year = end.getFullYear();
+
   if (weekStart.getMonth() === end.getMonth() && weekStart.getFullYear() === end.getFullYear()) {
     return `${startMonth} ${weekStart.getDate()} – ${end.getDate()}, ${year}`;
   }
+
   return `${startMonth} ${weekStart.getDate()} – ${endMonth} ${end.getDate()}, ${year}`;
 }
 
@@ -156,7 +164,7 @@ export default function Page() {
   const [savedMyName, setSavedMyName] = useState("");
   const [availability, setAvailability] = useState<AvailabilityMap>({});
   const [draftAvailability, setDraftAvailability] = useState<PersonAvailability>({});
-  const [activeCalendarView, setActiveCalendarView] = useState<string>("all");
+  const [activeCalendarView, setActiveCalendarView] = useState<CalendarView>("all");
   const [isDirty, setIsDirty] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -179,6 +187,7 @@ export default function Page() {
 
   async function fetchAllAvailability(showRefreshing = false): Promise<void> {
     const supabase = supabaseRef.current;
+
     if (!supabase) {
       if (typeof window !== "undefined") {
         const localRaw = localStorage.getItem(getStorageKey(pollId));
@@ -187,37 +196,49 @@ export default function Page() {
       }
       return;
     }
+
     if (showRefreshing) setIsRefreshing(true);
+
     const { data, error } = await supabase
       .from("meeting_availability")
       .select("participant_name, date_key, slots")
       .eq("poll_id", pollId);
+
     if (error) {
       setSaveMessage("Online-Daten konnten nicht geladen werden. Bitte Supabase-Konfiguration, RLS oder Netzwerk prüfen.");
     } else {
       setAvailability(inflateRowsToAvailability((data || []) as Array<{ participant_name: string; date_key: string; slots: string[] }>));
     }
+
     if (showRefreshing) setIsRefreshing(false);
   }
 
   useEffect(() => {
     if (!pollId) return;
     let ignore = false;
+
     async function init(): Promise<void> {
       setIsLoading(true);
+
       if (typeof window !== "undefined") {
         const profileRaw = localStorage.getItem(getProfileKey(pollId));
         const profile = profileRaw ? JSON.parse(profileRaw) : {};
         const cachedName = profile.myName || "";
+
         if (!ignore) {
           setMyName(cachedName);
           setSavedMyName(cachedName);
           setParticipantNameInput(cachedName);
         }
       }
+
       const supabase = supabaseRef.current;
       if (supabase) {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
+
         if (sessionError) {
           if (!ignore) {
             setSaveMessage("Anmeldestatus konnte nicht gelesen werden. Bitte Supabase Auth prüfen.");
@@ -227,6 +248,7 @@ export default function Page() {
           }
           return;
         }
+
         let activeSession = session;
         if (!activeSession) {
           const { data: anonData, error: anonError } = await supabase.auth.signInAnonymously();
@@ -241,16 +263,20 @@ export default function Page() {
           }
           activeSession = anonData.session;
         }
+
         if (!ignore) {
           setCurrentUserId(activeSession?.user?.id || "");
           setAuthReady(Boolean(activeSession?.user?.id));
           setAuthError("");
         }
       }
+
       await fetchAllAvailability(false);
       if (!ignore) setIsLoading(false);
     }
+
     void init();
+
     return () => {
       ignore = true;
     };
@@ -267,6 +293,7 @@ export default function Page() {
       setIsDirty(false);
       return;
     }
+
     const committed = normalizePersonAvailability(availability[savedMyName] || {});
     setDraftAvailability(committed);
     setIsDirty(false);
@@ -280,18 +307,27 @@ export default function Page() {
   useEffect(() => {
     const supabase = supabaseRef.current;
     if (!supabase || !pollId) return;
+
     const channel = supabase
       .channel(`meeting-poll-${pollId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "meeting_availability", filter: `poll_id=eq.${pollId}` }, async () => {
-        await fetchAllAvailability(false);
-      })
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "meeting_availability", filter: `poll_id=eq.${pollId}` },
+        async () => {
+          await fetchAllAvailability(false);
+        }
+      )
       .subscribe();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
       setCurrentUserId(session?.user?.id || "");
       setAuthReady(Boolean(session?.user?.id));
       if (session?.user?.id) setAuthError("");
       if (event === "SIGNED_OUT") setSaveMessage("Die Sitzung ist abgelaufen. Bitte Seite neu laden.");
     });
+
     return () => {
       void supabase.removeChannel(channel);
       subscription.unsubscribe();
@@ -301,19 +337,15 @@ export default function Page() {
   const participants = useMemo(() => Object.keys(availability).sort(), [availability]);
   const weekRangeLabel = useMemo(() => formatWeekRange(weekStart), [weekStart]);
 
-  const viewAvailability = useMemo(() => {
+  const displayedAvailability = useMemo<AvailabilityMap>(() => {
     if (activeCalendarView === "all") return availability;
-    return activeCalendarView && availability[activeCalendarView] ? { [activeCalendarView]: availability[activeCalendarView] } : {};
-  }, [activeCalendarView, availability]);
-
-  const viewedPersonAvailability = useMemo(() => {
-    if (activeCalendarView === "all") return null;
-    return normalizePersonAvailability(availability[activeCalendarView] || {});
+    const personData = availability[activeCalendarView];
+    return personData ? { [activeCalendarView]: personData } : {};
   }, [activeCalendarView, availability]);
 
   const cellCountMap = useMemo(() => {
     const map: Record<string, number> = {};
-    Object.values(viewAvailability).forEach((personData) => {
+    Object.values(displayedAvailability).forEach((personData) => {
       Object.entries(personData).forEach(([dateKey, slots]) => {
         slots.forEach((slotId) => {
           const key = `${dateKey}__${slotId}`;
@@ -322,36 +354,51 @@ export default function Page() {
       });
     });
     return map;
-  }, [viewAvailability]);
+  }, [displayedAvailability]);
 
   const topThreeCellKeys = useMemo(() => {
     if (activeCalendarView !== "all") return new Set<string>();
-    const ranked = weekDays.flatMap((day) => {
-      const dateKey = formatDateKey(day);
-      return TIME_SLOTS.map((slot) => ({ key: `${dateKey}__${slot.id}`, dateKey, slotId: slot.id, count: cellCountMap[`${dateKey}__${slot.id}`] || 0 }));
-    }).filter((item) => item.count > 0)
+
+    const ranked = weekDays
+      .flatMap((day) => {
+        const dateKey = formatDateKey(day);
+        return TIME_SLOTS.map((slot) => ({
+          key: `${dateKey}__${slot.id}`,
+          dateKey,
+          slotId: slot.id,
+          count: cellCountMap[`${dateKey}__${slot.id}`] || 0,
+        }));
+      })
+      .filter((item) => item.count > 0)
       .sort((a, b) => {
         if (b.count !== a.count) return b.count - a.count;
         if (a.dateKey !== b.dateKey) return a.dateKey.localeCompare(b.dateKey);
         return a.slotId.localeCompare(b.slotId);
       })
       .slice(0, 3);
+
     return new Set(ranked.map((item) => item.key));
   }, [activeCalendarView, cellCountMap, weekDays]);
 
   const majoritySlots = useMemo(() => {
     if (activeCalendarView !== "all") return [] as Array<{ dateKey: string; slotId: string; label: string; count: number }>;
+
     const totalParticipants = participants.length;
     if (totalParticipants === 0) return [] as Array<{ dateKey: string; slotId: string; label: string; count: number }>;
+
     const threshold = totalParticipants / 2;
     const result: Array<{ dateKey: string; slotId: string; label: string; count: number }> = [];
+
     weekDays.forEach((day) => {
       const dateKey = formatDateKey(day);
       TIME_SLOTS.forEach((slot) => {
         const count = cellCountMap[`${dateKey}__${slot.id}`] || 0;
-        if (count > threshold) result.push({ dateKey, slotId: slot.id, label: slot.label, count });
+        if (count > threshold) {
+          result.push({ dateKey, slotId: slot.id, label: slot.label, count });
+        }
       });
     });
+
     return result.sort((a, b) => {
       if (b.count !== a.count) return b.count - a.count;
       if (a.dateKey !== b.dateKey) return a.dateKey.localeCompare(b.dateKey);
@@ -373,11 +420,14 @@ export default function Page() {
       setSaveMessage("Bitte zuerst Ihren Namen bestätigen.");
       return;
     }
+
     const next = { ...draftAvailability };
     const existing = next[dateKey] || [];
     const updated = existing.includes(slotId) ? existing.filter((s) => s !== slotId) : [...existing, slotId];
+
     if (updated.length === 0) delete next[dateKey];
     else next[dateKey] = [...updated].sort();
+
     setDraftAvailability(normalizePersonAvailability(next));
     setIsDirty(true);
     setSaveMessage("");
@@ -389,14 +439,17 @@ export default function Page() {
       setSaveMessage("Bitte zuerst einen Namen eingeben und bestätigen.");
       return;
     }
+
     const supabase = supabaseRef.current;
     if (supabase && (!authReady || !currentUserId)) {
       setSaveMessage("Die anonyme Anmeldung ist noch nicht bereit. Bitte kurz warten und erneut versuchen.");
       return;
     }
+
     const normalizedDraft = normalizePersonAvailability(draftAvailability);
     setIsSaving(true);
     setSaveMessage("");
+
     try {
       if (supabase) {
         const { data: myRows, error: fetchMineError } = await supabase
@@ -405,9 +458,11 @@ export default function Page() {
           .eq("poll_id", pollId)
           .eq("owner_user_id", currentUserId);
         if (fetchMineError) throw fetchMineError;
+
         const savedDates = ((myRows || []) as Array<{ date_key: string }>).map((row) => row.date_key);
         const draftDates = Object.keys(normalizedDraft);
         const datesToDelete = savedDates.filter((dateKey) => !draftDates.includes(dateKey));
+
         if (datesToDelete.length > 0) {
           const { error: deleteError } = await supabase
             .from("meeting_availability")
@@ -417,6 +472,7 @@ export default function Page() {
             .in("date_key", datesToDelete);
           if (deleteError) throw deleteError;
         }
+
         const rowsToUpsert = flattenPersonAvailability(normalizedDraft, trimmedName, currentUserId, pollId);
         if (rowsToUpsert.length > 0) {
           const { error: upsertError } = await supabase
@@ -424,10 +480,12 @@ export default function Page() {
             .upsert(rowsToUpsert, { onConflict: "poll_id,participant_name,date_key" });
           if (upsertError) throw upsertError;
         }
+
         await fetchAllAvailability(false);
       } else {
         setAvailability((prev) => ({ ...prev, [trimmedName]: normalizedDraft }));
       }
+
       setSavedMyName(trimmedName);
       setMyName(trimmedName);
       setDraftAvailability(normalizedDraft);
@@ -471,7 +529,7 @@ export default function Page() {
           <div className="text-3xl font-bold text-slate-900">Terminvereinbarer</div>
           <div className="mt-2 text-base text-slate-600 sm:text-lg">Meeting: Weiterentwicklung KS-Schallschutzrechners</div>
           <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-600">
-            <strong>Kurzanleitung:</strong> Geben Sie Ihren Namen ein und bestätigen Sie ihn. Wählen Sie anschließend passende Zeitfenster im Kalender aus und speichern Sie danach Ihre Auswahl. <strong>Farben im Kalender:</strong> Weiße Felder bedeuten, dass bisher niemand dieses Zeitfenster gewählt hat. Hellgrüne Felder zeigen bereits gewählte Zeitfenster. Dunkelgrüne Felder markieren die aktuell beliebtesten drei Zeitfenster. Ein blauer Rand bedeutet, dass Sie dieses Zeitfenster selbst ausgewählt haben.
+            <strong>Kurzanleitung:</strong> Geben Sie Ihren Namen ein und bestätigen Sie ihn. Wählen Sie anschließend passende Zeitfenster im Kalender aus und speichern Sie danach Ihre Auswahl. <strong>Farben im Kalender:</strong> Weiße Felder bedeuten, dass bisher niemand dieses Zeitfenster gewählt hat. Hellgrüne Felder zeigen bereits gewählte Zeitfenster im gemeinsamen Kalender. Dunkelgrüne Felder markieren die aktuell beliebtesten drei Zeitfenster im gemeinsamen Kalender. Ein blauer Rand bedeutet, dass Sie dieses Zeitfenster selbst ausgewählt haben.
           </div>
         </div>
 
@@ -562,12 +620,12 @@ export default function Page() {
                 <div />
                 {weekDays.map((day, index) => {
                   const dateKey = formatDateKey(day);
-                  const hasOwnSelection = Boolean((draftAvailability[dateKey] || []).length);
+                  const ownDraftHasSelection = Boolean((draftAvailability[dateKey] || []).length);
                   const isToday = formatDateKey(day) === formatDateKey(new Date());
                   return (
-                    <div key={dateKey} className={`rounded-[18px] border border-slate-200 bg-white px-1 py-2 text-center sm:rounded-[22px] sm:px-2 sm:py-3 lg:rounded-[28px] lg:px-3 lg:py-5 ${hasOwnSelection ? "bg-blue-50" : ""}`}>
+                    <div key={dateKey} className={`rounded-[18px] border border-slate-200 bg-white px-1 py-2 text-center sm:rounded-[22px] sm:px-2 sm:py-3 lg:rounded-[28px] lg:px-3 lg:py-5 ${activeCalendarView === "all" && ownDraftHasSelection ? "bg-blue-50" : ""}`}>
                       <div className="text-[10px] uppercase tracking-wide text-slate-500 sm:text-xs">{WEEKDAYS[index]}</div>
-                      <div className={`mt-1 text-2xl font-semibold leading-none sm:text-3xl lg:mt-2 lg:text-5xl ${hasOwnSelection ? "text-blue-700" : "text-slate-800"}`}>{day.getDate()}</div>
+                      <div className={`mt-1 text-2xl font-semibold leading-none sm:text-3xl lg:mt-2 lg:text-5xl ${activeCalendarView === "all" && ownDraftHasSelection ? "text-blue-700" : "text-slate-800"}`}>{day.getDate()}</div>
                       {isToday && <div className="mt-1 text-[10px] text-slate-500 sm:text-xs lg:mt-3 lg:text-sm">Heute</div>}
                     </div>
                   );
@@ -581,49 +639,46 @@ export default function Page() {
                     {weekDays.map((day) => {
                       const dateKey = formatDateKey(day);
                       const ownDraftSelected = (draftAvailability[dateKey] || []).includes(slot.id);
-                      const viewedSelected = activeCalendarView === "all"
-                        ? (cellCountMap[`${dateKey}__${slot.id}`] || 0) > 0
-                        : Boolean(viewedPersonAvailability?.[dateKey]?.includes(slot.id));
-                      const count = activeCalendarView === "all"
-                        ? cellCountMap[`${dateKey}__${slot.id}`] || 0
-                        : viewedSelected ? 1 : 0;
-                      const hasAnySelection = viewedSelected;
-                      const isTopThree = activeCalendarView === "all" && topThreeCellKeys.has(`${dateKey}__${slot.id}`);
-                      const showOwnBorder = activeCalendarView === "all"
-                        ? ownDraftSelected
-                        : activeCalendarView === savedMyName && ownDraftSelected;
+                      const viewCount = cellCountMap[`${dateKey}__${slot.id}`] || 0;
+                      const viewedSelected = viewCount > 0;
+                      const isTopThree = topThreeCellKeys.has(`${dateKey}__${slot.id}`);
+                      const showOwnBlueBorder = activeCalendarView === "all" ? ownDraftSelected : activeCalendarView === savedMyName && ownDraftSelected;
+
+                      const baseClass = !viewedSelected
+                        ? "border border-slate-200 bg-white hover:bg-slate-50"
+                        : activeCalendarView === "all"
+                          ? isTopThree
+                            ? "border border-slate-200 bg-green-600 text-white"
+                            : "border border-slate-200 bg-green-100 text-slate-800"
+                          : "border border-slate-200 bg-blue-50 text-slate-800";
+
+                      const enhancedClass = showOwnBlueBorder
+                        ? activeCalendarView === "all"
+                          ? isTopThree
+                            ? "border-4 border-blue-500 bg-green-600 text-white"
+                            : viewedSelected
+                              ? "border-2 border-blue-500 bg-green-100 text-slate-800"
+                              : "border-2 border-blue-500 bg-white text-slate-800"
+                          : viewedSelected
+                            ? "border-2 border-blue-500 bg-blue-50 text-slate-800"
+                            : "border-2 border-blue-500 bg-white text-slate-800"
+                        : baseClass;
 
                       return (
                         <button
                           key={`${dateKey}-${slot.id}`}
                           onClick={() => toggleCell(dateKey, slot.id)}
-                          className={`relative min-h-[52px] rounded-[14px] px-1 py-1 text-left transition sm:min-h-[68px] sm:rounded-[18px] sm:px-1.5 sm:py-1.5 md:min-h-[82px] md:rounded-[20px] lg:min-h-[112px] lg:rounded-[28px] lg:px-4 lg:py-4 ${
-                            isTopThree
-                              ? showOwnBorder
-                                ? "border-4 border-blue-500 bg-green-600 text-white"
-                                : "border border-slate-200 bg-green-600 text-white"
-                              : hasAnySelection
-                                ? showOwnBorder
-                                  ? activeCalendarView === "all"
-                                    ? "border-2 border-blue-500 bg-green-100 text-slate-800"
-                                    : "border-2 border-blue-500 bg-blue-50 text-slate-800"
-                                  : activeCalendarView === "all"
-                                    ? "border border-slate-200 bg-green-100 text-slate-800"
-                                    : "border border-slate-200 bg-blue-50 text-slate-800"
-                                : showOwnBorder
-                                  ? "border-2 border-blue-500 bg-white text-slate-800"
-                                  : "border border-slate-200 bg-white hover:bg-slate-50"
-                          }`}
+                          className={`relative min-h-[52px] rounded-[14px] px-1 py-1 text-left transition sm:min-h-[68px] sm:rounded-[18px] sm:px-1.5 sm:py-1.5 md:min-h-[82px] md:rounded-[20px] lg:min-h-[112px] lg:rounded-[28px] lg:px-4 lg:py-4 ${enhancedClass}`}
                         >
                           <div className="flex h-full items-end justify-end">
-                            {(hasAnySelection || showOwnBorder) ? (
+                            {(viewedSelected || showOwnBlueBorder) ? (
                               <Badge
                                 variant="outline"
                                 className={`max-w-full whitespace-nowrap px-1 py-0 text-[9px] font-semibold leading-none sm:px-1.5 sm:py-0.5 sm:text-[11px] md:px-2 md:py-0.5 md:text-xs lg:px-2.5 lg:py-1 lg:text-sm xl:text-base ${
-                                  isTopThree ? "border-white/40 bg-white/10 text-white" : "border-slate-200 text-slate-700"
+                                  activeCalendarView === "all" && isTopThree ? "border-white/40 bg-white/10 text-white" : "border-slate-200 text-slate-700"
                                 }`}
                               >
-                                {activeCalendarView === "all" ? `${count} / ${participants.length}` : viewedSelected ? "1 / 1" : ""}
+                                {activeCalendarView === "all" ? `${viewCount} / ${participants.length}` : viewedSelected ? "1 / 1" : ""}
                               </Badge>
                             ) : null}
                           </div>
