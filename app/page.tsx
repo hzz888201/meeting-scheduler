@@ -491,9 +491,16 @@ export default function Page() {
       setDraftAvailability(normalizedDraft);
       setIsDirty(false);
       setSaveMessage("Ihre Verfügbarkeit wurde gespeichert.");
-    } catch (error) {
-      console.error(error);
-      setSaveMessage("Speichern fehlgeschlagen. Bitte Tabellenstruktur, RLS-Policy, anonyme Anmeldung und Netzwerk prüfen.");
+    } catch (error: any) {
+  console.error("Save error full:", error);
+
+  const message =
+    error?.message ||
+    error?.error_description ||
+    error?.details ||
+    JSON.stringify(error);
+
+  setSaveMessage(`Speichern fehlgeschlagen: ${message}`);
     } finally {
       setIsSaving(false);
     }
