@@ -735,12 +735,12 @@ export default function Page() {
           <CardHeader className="gap-4 border-b border-slate-100 pb-4 sm:pb-5">
             <CardTitle className="text-xl sm:text-2xl">Schritt 2: Zeitfenster auswählen</CardTitle>
 
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              <div className="font-semibold">Hinweis</div>
-              <div className="mt-1">
-                Empfohlene Termine sind der 1., 2., 5., 12., 22., 26. und 29. Juni 2026.
-              </div>
-            </div>
+           <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
+  <div className="font-semibold">Hinweis</div>
+  <div className="mt-1 text-xl font-extrabold sm:text-2xl">
+    Empfohlene Termine: 1., 2., 5., 12., 22., 26. und 29. Juni 2026
+  </div>
+</div>
 
             <div className="space-y-3">
               <p className="text-base font-medium leading-7 text-slate-700 sm:text-lg">
