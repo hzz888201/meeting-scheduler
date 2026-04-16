@@ -22,6 +22,11 @@ type MeetingRow = {
   slots: string[];
 };
 
+type WheelItem = {
+  value: number;
+  label: string;
+};
+
 const TIME_SLOTS = [
   { id: "09:00-10:00", label: "09:00–10:00" },
   { id: "10:00-11:00", label: "10:00–11:00" },
@@ -75,6 +80,10 @@ Blauer Rand: Ihre Auswahl
 Zeitfenster mit Mehrheit
 Angezeigt werden: Zeitfenster mit Mehrheitszustimmung, absteigend sortiert.
 `;
+
+const WHEEL_ITEM_HEIGHT = 44;
+const WHEEL_HEIGHT = 220;
+const WHEEL_SIDE_SPACER = (WHEEL_HEIGHT - WHEEL_ITEM_HEIGHT) / 2;
 
 function downloadGermanInstructions(): void {
   const blob = new Blob([GERMAN_INSTRUCTIONS], {
@@ -225,8 +234,125 @@ function formatWeekRange(weekStart: Date): string {
   return `${startDay}. ${startMonth} ${startYear} – ${endDay}. ${endMonth} ${endYear}`;
 }
 
+function WheelPicker({
+  label,
+  items,
+  value,
+  onChange,
+}: {
+  label: string;
+  items: WheelItem[];
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const selectedIndex = Math.max(
+    0,
+    items.findIndex((item) => item.value === value)
+  );
+
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+
+    const targetTop = selectedIndex * WHEEL_ITEM_HEIGHT;
+    if (Math.abs(el.scrollTop - targetTop) > 2) {
+      el.scrollTo({ top: targetTop, behavior: "smooth" });
+    }
+  }, [selectedIndex, items]);
+
+  useEffect(() => {
+    return () => {
+      if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
+    };
+  }, []);
+
+  function snapToClosest(): void {
+    const el = scrollerRef.current;
+    if (!el || items.length === 0) return;
+
+    const nextIndex = Math.max(
+      0,
+      Math.min(items.length - 1, Math.round(el.scrollTop / WHEEL_ITEM_HEIGHT))
+    );
+
+    const nextValue = items[nextIndex]?.value;
+    if (typeof nextValue === "number" && nextValue !== value) {
+      onChange(nextValue);
+    }
+
+    el.scrollTo({
+      top: nextIndex * WHEEL_ITEM_HEIGHT,
+      behavior: "smooth",
+    });
+  }
+
+  function handleScroll(): void {
+    if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current);
+    scrollTimerRef.current = setTimeout(() => {
+      snapToClosest();
+    }, 100);
+  }
+
+  function handleItemClick(index: number, nextValue: number): void {
+    const el = scrollerRef.current;
+    if (el) {
+      el.scrollTo({
+        top: index * WHEEL_ITEM_HEIGHT,
+        behavior: "smooth",
+      });
+    }
+    if (nextValue !== value) {
+      onChange(nextValue);
+    }
+  }
+
+  return (
+    <div className="min-w-[110px] flex-1 sm:min-w-[130px]">
+      <div className="mb-2 text-center text-sm font-medium text-slate-600">{label}</div>
+
+      <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div
+          ref={scrollerRef}
+          onScroll={handleScroll}
+          className="relative overflow-y-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          style={{ height: WHEEL_HEIGHT }}
+        >
+          <div style={{ height: WHEEL_SIDE_SPACER }} />
+          {items.map((item, index) => {
+            const isSelected = item.value === value;
+            return (
+              <button
+                key={`${label}-${item.value}`}
+                type="button"
+                onClick={() => handleItemClick(index, item.value)}
+                className={`flex w-full snap-center items-center justify-center px-3 text-center text-sm transition sm:text-base ${
+                  isSelected
+                    ? "font-semibold text-slate-900"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+                style={{ height: WHEEL_ITEM_HEIGHT }}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+          <div style={{ height: WHEEL_SIDE_SPACER }} />
+        </div>
+
+        <div className="pointer-events-none absolute inset-x-2 top-1/2 -translate-y-1/2 rounded-xl border-2 border-blue-200 bg-blue-50/40 shadow-sm" style={{ height: WHEEL_ITEM_HEIGHT }} />
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-white via-white/90 to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white via-white/90 to-transparent" />
+      </div>
+    </div>
+  );
+}
+
 export default function Page() {
   const today = new Date();
+
   const [pollId, setPollId] = useState(DEFAULT_POLL_ID);
   const [weekStart, setWeekStart] = useState<Date>(getWeekStart(today));
 
@@ -259,8 +385,35 @@ export default function Page() {
 
   const yearOptions = useMemo(() => {
     const currentYear = new Date().getFullYear();
-    return Array.from({ length: 11 }, (_, index) => currentYear - 5 + index);
+    return Array.from({ length: 13 }, (_, index) => currentYear - 3 + index);
   }, []);
+
+  const dayItems = useMemo<WheelItem[]>(
+    () =>
+      Array.from({ length: daysInSelectedMonth }, (_, index) => ({
+        value: index + 1,
+        label: String(index + 1),
+      })),
+    [daysInSelectedMonth]
+  );
+
+  const monthItems = useMemo<WheelItem[]>(
+    () =>
+      MONTHS_DE.map((month, index) => ({
+        value: index + 1,
+        label: month,
+      })),
+    []
+  );
+
+  const yearItems = useMemo<WheelItem[]>(
+    () =>
+      yearOptions.map((year) => ({
+        value: year,
+        label: String(year),
+      })),
+    [yearOptions]
+  );
 
   useEffect(() => {
     if (selectedDay > daysInSelectedMonth) {
@@ -269,7 +422,11 @@ export default function Page() {
   }, [selectedDay, daysInSelectedMonth]);
 
   useEffect(() => {
-    const selectedDate = new Date(selectedYear, selectedMonth - 1, Math.min(selectedDay, daysInSelectedMonth));
+    const selectedDate = new Date(
+      selectedYear,
+      selectedMonth - 1,
+      Math.min(selectedDay, daysInSelectedMonth)
+    );
     setWeekStart(getWeekStart(selectedDate));
   }, [selectedDay, selectedMonth, selectedYear, daysInSelectedMonth]);
 
@@ -406,7 +563,12 @@ export default function Page() {
       .channel(`meeting-poll-${pollId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "meeting_availability", filter: `poll_id=eq.${pollId}` },
+        {
+          event: "*",
+          schema: "public",
+          table: "meeting_availability",
+          filter: `poll_id=eq.${pollId}`,
+        },
         async () => {
           await fetchAllAvailability();
         }
@@ -485,9 +647,7 @@ export default function Page() {
       const dateKey = formatDateKey(day);
       TIME_SLOTS.forEach((slot) => {
         const count = aggregatedCellCountMap[`${dateKey}__${slot.id}`] || 0;
-        if (count > threshold) {
-          result.push({ dateKey, slotId: slot.id, label: slot.label, count });
-        }
+        if (count > threshold) result.push({ dateKey, slotId: slot.id, label: slot.label, count });
       });
     });
 
@@ -718,44 +878,33 @@ export default function Page() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                <select
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 sm:p-5">
+              <div className="mb-4 text-sm font-medium text-slate-700 sm:text-base">
+                Datum auswählen
+              </div>
+
+              <div className="flex flex-col gap-4 md:flex-row">
+                <WheelPicker
+                  label="Tag"
+                  items={dayItems}
                   value={selectedDay}
-                  onChange={(e) => setSelectedDay(Number(e.target.value))}
-                  className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm outline-none focus:border-blue-400 sm:text-base"
-                >
-                  {Array.from({ length: daysInSelectedMonth }, (_, index) => index + 1).map((day) => (
-                    <option key={day} value={day}>
-                      Tag {day}
-                    </option>
-                  ))}
-                </select>
-
-                <select
+                  onChange={setSelectedDay}
+                />
+                <WheelPicker
+                  label="Monat"
+                  items={monthItems}
                   value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                  className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm outline-none focus:border-blue-400 sm:text-base"
-                >
-                  {MONTHS_DE.map((month, index) => (
-                    <option key={month} value={index + 1}>
-                      {month}
-                    </option>
-                  ))}
-                </select>
-
-                <select
+                  onChange={setSelectedMonth}
+                />
+                <WheelPicker
+                  label="Jahr"
+                  items={yearItems}
                   value={selectedYear}
-                  onChange={(e) => setSelectedYear(Number(e.target.value))}
-                  className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm outline-none focus:border-blue-400 sm:text-base"
-                >
-                  {yearOptions.map((year) => (
-                    <option key={year} value={year}>
-                      Jahr {year}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setSelectedYear}
+                />
+              </div>
 
+              <div className="mt-4 flex justify-center md:justify-start">
                 <Button
                   variant="outline"
                   className="h-11 rounded-xl border-2 border-green-500 px-4 text-sm font-semibold text-green-600 hover:bg-green-50 sm:text-base"
@@ -764,13 +913,15 @@ export default function Page() {
                   Heute
                 </Button>
               </div>
-
-              <div className="text-sm font-medium text-slate-700 sm:text-base">{calendarTitle}</div>
             </div>
 
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-center text-base font-semibold text-slate-900 sm:text-xl lg:min-w-[320px] lg:text-2xl">
                 {weekRangeLabel}
+              </div>
+
+              <div className="text-sm font-medium text-slate-700 sm:text-base">
+                {calendarTitle}
               </div>
 
               <Button
