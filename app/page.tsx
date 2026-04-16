@@ -28,11 +28,6 @@ type MeetingRow = {
   slots: string[];
 };
 
-type WheelOption = {
-  value: number;
-  label: string;
-};
-
 const TIME_SLOTS = [
   { id: "09:00-10:00", label: "09:00–10:00" },
   { id: "10:00-11:00", label: "10:00–11:00" },
@@ -59,7 +54,6 @@ const MONTHS_DE = [
   "November",
   "Dezember",
 ];
-
 const DEFAULT_POLL_ID = "team-meeting-demo";
 
 const GERMAN_INSTRUCTIONS = `Terminabstimmung
@@ -87,11 +81,6 @@ Blauer Rand: Ihre Auswahl
 Zeitfenster mit Mehrheit
 Angezeigt werden: Zeitfenster mit Mehrheitszustimmung, absteigend sortiert.
 `;
-
-const WHEEL_ITEM_HEIGHT = 44;
-const WHEEL_VISIBLE_ROWS = 5;
-const WHEEL_HEIGHT = WHEEL_ITEM_HEIGHT * WHEEL_VISIBLE_ROWS;
-const WHEEL_PADDING = (WHEEL_HEIGHT - WHEEL_ITEM_HEIGHT) / 2;
 
 function downloadGermanInstructions(): void {
   const blob = new Blob([GERMAN_INSTRUCTIONS], {
@@ -138,7 +127,8 @@ function formatDateKey(date: Date): string {
 function formatDateDE(dateKey: string): string {
   const [y, m, d] = dateKey.split("-");
   const date = new Date(Number(y), Number(m) - 1, Number(d));
-  return `${d}.${m}.${y} ${WEEKDAYS[date.getDay()]}`;
+  const weekdayMap = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+  return `${d}.${m}.${y} ${weekdayMap[date.getDay()]}`;
 }
 
 function normalizePersonAvailability(input: unknown): PersonAvailability {
@@ -158,7 +148,6 @@ function inflateRowsToAvailability(
   rows: Array<{ participant_name: string; date_key: string; slots: string[] }>
 ): AvailabilityMap {
   const result: AvailabilityMap = {};
-
   rows.forEach((row) => {
     if (!row?.participant_name || !row?.date_key) return;
     if (!result[row.participant_name]) result[row.participant_name] = {};
@@ -166,7 +155,6 @@ function inflateRowsToAvailability(
       ? Array.from(new Set(row.slots)).sort()
       : [];
   });
-
   return result;
 }
 
@@ -235,146 +223,10 @@ function formatWeekRange(weekStart: Date): string {
   if (weekStart.getMonth() === end.getMonth() && startYear === endYear) {
     return `${startDay}.–${endDay}. ${startMonth} ${startYear}`;
   }
-
   if (startYear === endYear) {
     return `${startDay}. ${startMonth} – ${endDay}. ${endMonth} ${startYear}`;
   }
-
   return `${startDay}. ${startMonth} ${startYear} – ${endDay}. ${endMonth} ${endYear}`;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
-
-function WheelColumn({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string;
-  options: WheelOption[];
-  value: number;
-  onChange: (value: number) => void;
-}) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const selectedIndex = Math.max(
-    0,
-    options.findIndex((option) => option.value === value)
-  );
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-    const targetTop = selectedIndex * WHEEL_ITEM_HEIGHT;
-    if (Math.abs(container.scrollTop - targetTop) > 2) {
-      container.scrollTo({ top: targetTop, behavior: "smooth" });
-    }
-  }, [selectedIndex]);
-
-  useEffect(() => {
-    return () => {
-      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-    };
-  }, []);
-
-  function snapToNearest() {
-    const container = containerRef.current;
-    if (!container || options.length === 0) return;
-
-    const rawIndex = Math.round(container.scrollTop / WHEEL_ITEM_HEIGHT);
-    const index = clamp(rawIndex, 0, options.length - 1);
-    const next = options[index];
-
-    container.scrollTo({
-      top: index * WHEEL_ITEM_HEIGHT,
-      behavior: "smooth",
-    });
-
-    if (next && next.value !== value) {
-      onChange(next.value);
-    }
-  }
-
-  function handleScroll() {
-    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-    scrollTimeoutRef.current = setTimeout(() => {
-      snapToNearest();
-    }, 80);
-  }
-
-  function handleWheel(e: React.WheelEvent<HTMLDivElement>) {
-    e.preventDefault();
-    const direction = e.deltaY > 0 ? 1 : -1;
-    const nextIndex = clamp(selectedIndex + direction, 0, options.length - 1);
-    const next = options[nextIndex];
-    if (next) onChange(next.value);
-  }
-
-  return (
-    <div className="min-w-[100px] flex-1">
-      <div className="mb-2 text-center text-sm font-medium text-slate-600">{label}</div>
-
-      <div className="relative rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div
-          ref={containerRef}
-          onScroll={handleScroll}
-          onWheel={handleWheel}
-          className="overflow-y-auto"
-          style={{
-            height: WHEEL_HEIGHT,
-            scrollbarWidth: "none",
-            msOverflowStyle: "none",
-          }}
-        >
-          <style jsx>{`
-            div::-webkit-scrollbar {
-              display: none;
-            }
-          `}</style>
-
-          <div style={{ height: WHEEL_PADDING }} />
-
-          {options.map((option, index) => {
-            const isSelected = option.value === value;
-            const distance = Math.abs(index - selectedIndex);
-            const opacity = distance === 0 ? 1 : distance === 1 ? 0.68 : distance === 2 ? 0.38 : 0.18;
-            const scale = distance === 0 ? 1 : distance === 1 ? 0.95 : 0.9;
-
-            return (
-              <button
-                key={`${label}-${option.value}`}
-                type="button"
-                onClick={() => onChange(option.value)}
-                className={`flex w-full items-center justify-center px-2 transition ${
-                  isSelected ? "font-semibold text-slate-900" : "text-slate-500"
-                }`}
-                style={{
-                  height: WHEEL_ITEM_HEIGHT,
-                  opacity,
-                  transform: `scale(${scale})`,
-                }}
-              >
-                <span className="truncate">{option.label}</span>
-              </button>
-            );
-          })}
-
-          <div style={{ height: WHEEL_PADDING }} />
-        </div>
-
-        <div
-          className="pointer-events-none absolute left-2 right-2 top-1/2 -translate-y-1/2 rounded-xl border-2 border-blue-300 bg-blue-50/70"
-          style={{ height: WHEEL_ITEM_HEIGHT }}
-        />
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-12 rounded-t-2xl bg-gradient-to-b from-white via-white/90 to-transparent" />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 rounded-b-2xl bg-gradient-to-t from-white via-white/90 to-transparent" />
-      </div>
-    </div>
-  );
 }
 
 export default function Page() {
@@ -383,9 +235,9 @@ export default function Page() {
   const [pollId, setPollId] = useState(DEFAULT_POLL_ID);
   const [weekStart, setWeekStart] = useState<Date>(getWeekStart(today));
 
-  const [selectedDay, setSelectedDay] = useState(today.getDate());
-  const [selectedMonth, setSelectedMonth] = useState(today.getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState(today.getFullYear());
+  const [selectedDay, setSelectedDay] = useState<number>(today.getDate());
+  const [selectedMonth, setSelectedMonth] = useState<number>(today.getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState<number>(today.getFullYear());
 
   const [participantNameInput, setParticipantNameInput] = useState("");
   const [myName, setMyName] = useState("");
@@ -412,35 +264,8 @@ export default function Page() {
 
   const yearOptions = useMemo(() => {
     const currentYear = new Date().getFullYear();
-    return Array.from({ length: 13 }, (_, index) => currentYear - 3 + index);
+    return Array.from({ length: 11 }, (_, index) => currentYear - 5 + index);
   }, []);
-
-  const dayOptions = useMemo<WheelOption[]>(
-    () =>
-      Array.from({ length: daysInSelectedMonth }, (_, index) => ({
-        value: index + 1,
-        label: String(index + 1),
-      })),
-    [daysInSelectedMonth]
-  );
-
-  const monthOptions = useMemo<WheelOption[]>(
-    () =>
-      MONTHS_DE.map((month, index) => ({
-        value: index + 1,
-        label: month,
-      })),
-    []
-  );
-
-  const yearOptionsWheel = useMemo<WheelOption[]>(
-    () =>
-      yearOptions.map((year) => ({
-        value: year,
-        label: String(year),
-      })),
-    [yearOptions]
-  );
 
   useEffect(() => {
     if (selectedDay > daysInSelectedMonth) {
@@ -449,11 +274,7 @@ export default function Page() {
   }, [selectedDay, daysInSelectedMonth]);
 
   useEffect(() => {
-    const selectedDate = new Date(
-      selectedYear,
-      selectedMonth - 1,
-      Math.min(selectedDay, daysInSelectedMonth)
-    );
+    const selectedDate = new Date(selectedYear, selectedMonth - 1, Math.min(selectedDay, daysInSelectedMonth));
     setWeekStart(getWeekStart(selectedDate));
   }, [selectedDay, selectedMonth, selectedYear, daysInSelectedMonth]);
 
@@ -608,9 +429,7 @@ export default function Page() {
       setCurrentUserId(session?.user?.id || "");
       setAuthReady(Boolean(session?.user?.id));
       if (session?.user?.id) setAuthError("");
-      if (event === "SIGNED_OUT") {
-        setSaveMessage("Die Sitzung ist abgelaufen. Bitte Seite neu laden.");
-      }
+      if (event === "SIGNED_OUT") setSaveMessage("Die Sitzung ist abgelaufen. Bitte Seite neu laden.");
     });
 
     return () => {
@@ -705,7 +524,6 @@ export default function Page() {
       setSaveMessage("Bitte zuerst Ihren Namen bestätigen.");
       return;
     }
-
     if (!canEditCurrentView) {
       setSaveMessage("Im Kalender einer anderen Person ist nur die Anzeige möglich.");
       return;
@@ -727,7 +545,6 @@ export default function Page() {
 
   async function saveMyAvailability(): Promise<void> {
     const trimmedName = activeParticipant.trim();
-
     if (!trimmedName) {
       setSaveMessage("Bitte zuerst einen Namen eingeben und bestätigen.");
       return;
@@ -750,7 +567,6 @@ export default function Page() {
           .select("date_key")
           .eq("poll_id", pollId)
           .eq("owner_user_id", currentUserId);
-
         if (fetchMineError) throw fetchMineError;
 
         const savedDates = ((myRows || []) as Array<{ date_key: string }>).map((row) => row.date_key);
@@ -764,17 +580,14 @@ export default function Page() {
             .eq("poll_id", pollId)
             .eq("owner_user_id", currentUserId)
             .in("date_key", datesToDelete);
-
           if (deleteError) throw deleteError;
         }
 
         const rowsToUpsert = flattenPersonAvailability(normalizedDraft, trimmedName, currentUserId, pollId);
-
         if (rowsToUpsert.length > 0) {
           const { error: upsertError } = await supabase
             .from("meeting_availability")
             .upsert(rowsToUpsert, { onConflict: "poll_id,participant_name,date_key" });
-
           if (upsertError) throw upsertError;
         }
 
@@ -782,7 +595,6 @@ export default function Page() {
       } else {
         const nextAvailability = { ...availability, [trimmedName]: normalizedDraft };
         setAvailability(nextAvailability);
-
         if (typeof window !== "undefined") {
           localStorage.setItem(
             getStorageKey(pollId),
@@ -830,13 +642,8 @@ export default function Page() {
     setSelectedDate(new Date());
   }
 
-  const mySavedAvailability = savedMyName
-    ? normalizePersonAvailability(availability[savedMyName] || {})
-    : {};
-
-  const hasServerDiff = savedMyName
-    ? !arePersonAvailabilityEqual(mySavedAvailability, draftAvailability)
-    : false;
+  const mySavedAvailability = savedMyName ? normalizePersonAvailability(availability[savedMyName] || {}) : {};
+  const hasServerDiff = savedMyName ? !arePersonAvailabilityEqual(mySavedAvailability, draftAvailability) : false;
 
   return (
     <div className="min-h-screen bg-[#f6f7f4] p-3 sm:p-4 lg:p-6">
@@ -865,7 +672,6 @@ export default function Page() {
           <CardHeader>
             <CardTitle className="text-xl sm:text-2xl">Schritt 1: Namen eingeben</CardTitle>
           </CardHeader>
-
           <CardContent className="space-y-4">
             <div className="flex flex-col gap-3 xl:flex-row">
               <Input
@@ -886,8 +692,7 @@ export default function Page() {
               </div>
             ) : supabaseRef.current && !authReady ? (
               <div className="rounded-2xl border border-dashed border-amber-300 p-4 text-sm text-amber-700">
-                {authError ||
-                  "Die anonyme Anmeldung ist noch nicht bereit. Bitte Supabase Auth prüfen und die Seite neu laden."}
+                {authError || "Die anonyme Anmeldung ist noch nicht bereit. Bitte Supabase Auth prüfen und die Seite neu laden."}
               </div>
             ) : null}
 
@@ -913,10 +718,10 @@ export default function Page() {
             <CardTitle className="text-xl sm:text-2xl">Schritt 2: Zeitfenster auswählen</CardTitle>
 
             <div className="space-y-3">
-              <div className="text-base font-medium text-slate-700 sm:text-lg">
+              <p className="text-base font-medium leading-7 text-slate-700 sm:text-lg">
                 Kalenderansicht: Klicken Sie auf einen Teilnehmendennamen, um dessen Auswahl anzuzeigen.
                 Der gemeinsame Kalender zeigt alle gewählten Zeitfenster.
-              </div>
+              </p>
 
               <div className="flex flex-wrap gap-3">
                 <Badge
@@ -945,35 +750,52 @@ export default function Page() {
                 Datum auswählen
               </div>
 
-              <div className="flex flex-col gap-4 md:flex-row">
-                <WheelColumn
-                  label="Tag"
-                  options={dayOptions}
+              <div className="flex flex-col gap-3 xl:flex-row">
+                <select
                   value={selectedDay}
-                  onChange={setSelectedDay}
-                />
-                <WheelColumn
-                  label="Monat"
-                  options={monthOptions}
+                  onChange={(e) => setSelectedDay(Number(e.target.value))}
+                  className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm outline-none focus:border-blue-400 sm:text-base"
+                >
+                  {Array.from({ length: daysInSelectedMonth }, (_, index) => index + 1).map((day) => (
+                    <option key={day} value={day}>
+                      Tag {day}
+                    </option>
+                  ))}
+                </select>
+
+                <select
                   value={selectedMonth}
-                  onChange={setSelectedMonth}
-                />
-                <WheelColumn
-                  label="Jahr"
-                  options={yearOptionsWheel}
+                  onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                  className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm outline-none focus:border-blue-400 sm:text-base"
+                >
+                  {MONTHS_DE.map((month, index) => (
+                    <option key={month} value={index + 1}>
+                      {month}
+                    </option>
+                  ))}
+                </select>
+
+                <select
                   value={selectedYear}
-                  onChange={setSelectedYear}
-                />
+                  onChange={(e) => setSelectedYear(Number(e.target.value))}
+                  className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm outline-none focus:border-blue-400 sm:text-base"
+                >
+                  {yearOptions.map((year) => (
+                    <option key={year} value={year}>
+                      Jahr {year}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="mt-4 flex flex-wrap items-center justify-center gap-3 md:justify-start">
                 <Button
                   variant="outline"
-                  className="h-11 rounded-xl border-slate-200 px-4"
+                  className="h-11 w-11 rounded-xl border-slate-200 p-0"
                   onClick={goPrevWeek}
+                  aria-label="Vorherige Woche"
                 >
-                  <ChevronLeft className="mr-1 h-4 w-4" />
-                  Woche
+                  <ChevronLeft className="h-5 w-5" />
                 </Button>
 
                 <div className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-800 sm:text-base">
@@ -982,11 +804,11 @@ export default function Page() {
 
                 <Button
                   variant="outline"
-                  className="h-11 rounded-xl border-slate-200 px-4"
+                  className="h-11 w-11 rounded-xl border-slate-200 p-0"
                   onClick={goNextWeek}
+                  aria-label="Nächste Woche"
                 >
-                  Woche
-                  <ChevronRight className="ml-1 h-4 w-4" />
+                  <ChevronRight className="h-5 w-5" />
                 </Button>
 
                 <Button
@@ -1040,115 +862,106 @@ export default function Page() {
             )}
           </CardHeader>
 
-          <CardContent className="p-2 sm:p-3 lg:p-5">
-            <div className="w-full overflow-auto rounded-2xl border border-slate-200 bg-slate-50/40 max-h-[70vh]">
-              <div className="grid min-w-[900px] grid-cols-[64px_repeat(7,minmax(0,1fr))] gap-1 p-2 sm:grid-cols-[78px_repeat(7,minmax(0,1fr))] sm:gap-1.5 md:grid-cols-[88px_repeat(7,minmax(0,1fr))] lg:grid-cols-[110px_repeat(7,minmax(0,1fr))] lg:gap-3 lg:p-3">
-                <div className="sticky top-0 z-30 rounded-[16px] border border-slate-200 bg-white sm:rounded-[20px] lg:rounded-[28px]" />
+          <CardContent className="p-2 sm:p-3 lg:p-4">
+            <div className="grid w-full grid-cols-[56px_repeat(7,minmax(0,1fr))] gap-1 sm:grid-cols-[68px_repeat(7,minmax(0,1fr))] sm:gap-1.5 md:grid-cols-[76px_repeat(7,minmax(0,1fr))] lg:grid-cols-[88px_repeat(7,minmax(0,1fr))] lg:gap-2">
+              <div />
+              {weekDays.map((day, index) => {
+                const dateKey = formatDateKey(day);
+                const ownDraftHasSelection = Boolean((draftAvailability[dateKey] || []).length);
+                const isToday = formatDateKey(day) === formatDateKey(new Date());
 
-                {weekDays.map((day, index) => {
-                  const dateKey = formatDateKey(day);
-                  const ownDraftHasSelection = Boolean((draftAvailability[dateKey] || []).length);
-                  const isToday = formatDateKey(day) === formatDateKey(new Date());
-
-                  return (
+                return (
+                  <div
+                    key={dateKey}
+                    className={`rounded-[16px] border border-slate-200 px-1 py-2 text-center sm:rounded-[18px] sm:px-2 sm:py-2.5 lg:rounded-[20px] lg:px-2 lg:py-3 ${
+                      activeCalendarView === "all" && ownDraftHasSelection ? "bg-blue-50" : "bg-white"
+                    }`}
+                  >
+                    <div className="text-[10px] uppercase tracking-wide text-slate-500 sm:text-[11px]">
+                      {WEEKDAYS[index]}
+                    </div>
                     <div
-                      key={dateKey}
-                      className={`sticky top-0 z-20 rounded-[18px] border border-slate-200 px-1 py-2 text-center shadow-sm sm:rounded-[22px] sm:px-2 sm:py-3 lg:rounded-[28px] lg:px-3 lg:py-5 ${
-                        activeCalendarView === "all" && ownDraftHasSelection
-                          ? "bg-blue-50"
-                          : "bg-white"
+                      className={`mt-1 text-xl font-semibold leading-none sm:text-2xl lg:text-3xl ${
+                        activeCalendarView === "all" && ownDraftHasSelection ? "text-blue-700" : "text-slate-800"
                       }`}
                     >
-                      <div className="text-[10px] uppercase tracking-wide text-slate-500 sm:text-xs">
-                        {WEEKDAYS[index]}
+                      {day.getDate()}
+                    </div>
+                    {isToday && (
+                      <div className="mt-1 text-[10px] text-slate-500 sm:text-[11px]">
+                        Heute
                       </div>
+                    )}
+                  </div>
+                );
+              })}
 
-                      <div
-                        className={`mt-1 text-2xl font-semibold leading-none sm:text-3xl lg:mt-2 lg:text-5xl ${
-                          activeCalendarView === "all" && ownDraftHasSelection
-                            ? "text-blue-700"
-                            : "text-slate-800"
+              {TIME_SLOTS.map((slot) => (
+                <React.Fragment key={slot.id}>
+                  <div className="flex items-start rounded-[14px] border border-slate-200 bg-white px-1 py-2 text-[9px] font-medium leading-tight text-slate-700 sm:rounded-[16px] sm:px-1.5 sm:py-2.5 sm:text-[10px] md:text-xs lg:rounded-[18px] lg:px-2 lg:py-3 lg:text-sm">
+                    {slot.label}
+                  </div>
+
+                  {weekDays.map((day) => {
+                    const dateKey = formatDateKey(day);
+                    const ownDraftSelected = (draftAvailability[dateKey] || []).includes(slot.id);
+                    const aggregatedCount = aggregatedCellCountMap[`${dateKey}__${slot.id}`] || 0;
+                    const personSelected = Boolean(viewedPersonAvailability[dateKey]?.includes(slot.id));
+                    const isTopThree =
+                      activeCalendarView === "all" && topThreeCellKeys.has(`${dateKey}__${slot.id}`);
+                    const showOwnBlueBorder = canEditCurrentView && ownDraftSelected;
+
+                    const isFilledInCurrentView =
+                      activeCalendarView === "all" ? aggregatedCount > 0 : personSelected;
+
+                    const filledClass =
+                      activeCalendarView === "all"
+                        ? isTopThree
+                          ? "bg-green-600 text-white"
+                          : "bg-green-100 text-slate-800"
+                        : "bg-blue-50 text-slate-800";
+
+                    const borderClass = showOwnBlueBorder
+                      ? activeCalendarView === "all" && isTopThree
+                        ? "border-4 border-blue-500"
+                        : "border-2 border-blue-500"
+                      : "border border-slate-200";
+
+                    return (
+                      <button
+                        key={`${dateKey}-${slot.id}`}
+                        onClick={() => toggleCell(dateKey, slot.id)}
+                        className={`relative min-h-[44px] rounded-[12px] px-1 py-1 text-left transition sm:min-h-[52px] sm:rounded-[14px] md:min-h-[58px] lg:min-h-[66px] lg:rounded-[16px] lg:px-2 lg:py-2 ${
+                          isFilledInCurrentView
+                            ? `${borderClass} ${filledClass}`
+                            : `${borderClass} bg-white text-slate-800 hover:bg-slate-50`
                         }`}
                       >
-                        {day.getDate()}
-                      </div>
-
-                      {isToday && (
-                        <div className="mt-1 text-[10px] text-slate-500 sm:text-xs lg:mt-3 lg:text-sm">
-                          Heute
+                        <div className="flex h-full items-end justify-end">
+                          {(activeCalendarView === "all"
+                            ? aggregatedCount > 0
+                            : personSelected || showOwnBlueBorder) ? (
+                            <Badge
+                              variant="outline"
+                              className={`max-w-full whitespace-nowrap px-1 py-0 text-[8px] font-semibold leading-none sm:text-[9px] md:text-[10px] lg:px-1.5 lg:py-0.5 ${
+                                activeCalendarView === "all" && isTopThree
+                                  ? "border-white/40 bg-white/10 text-white"
+                                  : "border-slate-200 text-slate-700"
+                              }`}
+                            >
+                              {activeCalendarView === "all"
+                                ? `${aggregatedCount} / ${participants.length}`
+                                : personSelected
+                                ? `${aggregatedCount} / ${participants.length}`
+                                : ""}
+                            </Badge>
+                          ) : null}
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
-
-                {TIME_SLOTS.map((slot) => (
-                  <React.Fragment key={slot.id}>
-                    <div className="flex items-start rounded-[16px] border border-slate-200 bg-white px-1.5 py-2 text-[10px] font-medium leading-tight text-slate-700 sm:rounded-[20px] sm:px-2.5 sm:py-3 sm:text-xs md:text-sm lg:rounded-[28px] lg:px-4 lg:py-6 lg:text-xl xl:text-2xl">
-                      {slot.label}
-                    </div>
-
-                    {weekDays.map((day) => {
-                      const dateKey = formatDateKey(day);
-                      const ownDraftSelected = (draftAvailability[dateKey] || []).includes(slot.id);
-                      const aggregatedCount = aggregatedCellCountMap[`${dateKey}__${slot.id}`] || 0;
-                      const personSelected = Boolean(viewedPersonAvailability[dateKey]?.includes(slot.id));
-                      const isTopThree =
-                        activeCalendarView === "all" && topThreeCellKeys.has(`${dateKey}__${slot.id}`);
-                      const showOwnBlueBorder = canEditCurrentView && ownDraftSelected;
-
-                      const isFilledInCurrentView =
-                        activeCalendarView === "all" ? aggregatedCount > 0 : personSelected;
-
-                      const filledClass =
-                        activeCalendarView === "all"
-                          ? isTopThree
-                            ? "bg-green-600 text-white"
-                            : "bg-green-100 text-slate-800"
-                          : "bg-blue-50 text-slate-800";
-
-                      const borderClass = showOwnBlueBorder
-                        ? activeCalendarView === "all" && isTopThree
-                          ? "border-4 border-blue-500"
-                          : "border-2 border-blue-500"
-                        : "border border-slate-200";
-
-                      return (
-                        <button
-                          key={`${dateKey}-${slot.id}`}
-                          onClick={() => toggleCell(dateKey, slot.id)}
-                          className={`relative min-h-[52px] rounded-[14px] px-1 py-1 text-left transition sm:min-h-[68px] sm:rounded-[18px] sm:px-1.5 sm:py-1.5 md:min-h-[82px] md:rounded-[20px] lg:min-h-[112px] lg:rounded-[28px] lg:px-4 lg:py-4 ${
-                            isFilledInCurrentView
-                              ? `${borderClass} ${filledClass}`
-                              : `${borderClass} bg-white text-slate-800 hover:bg-slate-50`
-                          }`}
-                        >
-                          <div className="flex h-full items-end justify-end">
-                            {(activeCalendarView === "all"
-                              ? aggregatedCount > 0
-                              : personSelected || showOwnBlueBorder) ? (
-                              <Badge
-                                variant="outline"
-                                className={`max-w-full whitespace-nowrap px-1 py-0 text-[9px] font-semibold leading-none sm:px-1.5 sm:py-0.5 sm:text-[11px] md:px-2 md:py-0.5 md:text-xs lg:px-2.5 lg:py-1 lg:text-sm xl:text-base ${
-                                  activeCalendarView === "all" && isTopThree
-                                    ? "border-white/40 bg-white/10 text-white"
-                                    : "border-slate-200 text-slate-700"
-                                }`}
-                              >
-                                {activeCalendarView === "all"
-                                  ? `${aggregatedCount} / ${participants.length}`
-                                  : personSelected
-                                  ? `${aggregatedCount} / ${participants.length}`
-                                  : ""}
-                              </Badge>
-                            ) : null}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </React.Fragment>
-                ))}
-              </div>
+                      </button>
+                    );
+                  })}
+                </React.Fragment>
+              ))}
             </div>
           </CardContent>
         </Card>
@@ -1163,7 +976,6 @@ export default function Page() {
               Angezeigt werden: Zeitfenster mit Mehrheitszustimmung, absteigend sortiert.
             </p>
           </CardHeader>
-
           <CardContent>
             {activeCalendarView !== "all" ? (
               <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
