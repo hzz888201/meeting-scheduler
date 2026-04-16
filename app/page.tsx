@@ -274,7 +274,11 @@ export default function Page() {
   }, [selectedDay, daysInSelectedMonth]);
 
   useEffect(() => {
-    const selectedDate = new Date(selectedYear, selectedMonth - 1, Math.min(selectedDay, daysInSelectedMonth));
+    const selectedDate = new Date(
+      selectedYear,
+      selectedMonth - 1,
+      Math.min(selectedDay, daysInSelectedMonth)
+    );
     setWeekStart(getWeekStart(selectedDate));
   }, [selectedDay, selectedMonth, selectedYear, daysInSelectedMonth]);
 
@@ -429,7 +433,9 @@ export default function Page() {
       setCurrentUserId(session?.user?.id || "");
       setAuthReady(Boolean(session?.user?.id));
       if (session?.user?.id) setAuthError("");
-      if (event === "SIGNED_OUT") setSaveMessage("Die Sitzung ist abgelaufen. Bitte Seite neu laden.");
+      if (event === "SIGNED_OUT") {
+        setSaveMessage("Die Sitzung ist abgelaufen. Bitte Seite neu laden.");
+      }
     });
 
     return () => {
@@ -552,7 +558,9 @@ export default function Page() {
 
     const supabase = supabaseRef.current;
     if (supabase && (!authReady || !currentUserId)) {
-      setSaveMessage("Die anonyme Anmeldung ist noch nicht bereit. Bitte kurz warten und erneut versuchen.");
+      setSaveMessage(
+        "Die anonyme Anmeldung ist noch nicht bereit. Bitte kurz warten und erneut versuchen."
+      );
       return;
     }
 
@@ -583,7 +591,12 @@ export default function Page() {
           if (deleteError) throw deleteError;
         }
 
-        const rowsToUpsert = flattenPersonAvailability(normalizedDraft, trimmedName, currentUserId, pollId);
+        const rowsToUpsert = flattenPersonAvailability(
+          normalizedDraft,
+          trimmedName,
+          currentUserId,
+          pollId
+        );
         if (rowsToUpsert.length > 0) {
           const { error: upsertError } = await supabase
             .from("meeting_availability")
@@ -642,8 +655,12 @@ export default function Page() {
     setSelectedDate(new Date());
   }
 
-  const mySavedAvailability = savedMyName ? normalizePersonAvailability(availability[savedMyName] || {}) : {};
-  const hasServerDiff = savedMyName ? !arePersonAvailabilityEqual(mySavedAvailability, draftAvailability) : false;
+  const mySavedAvailability = savedMyName
+    ? normalizePersonAvailability(availability[savedMyName] || {})
+    : {};
+  const hasServerDiff = savedMyName
+    ? !arePersonAvailabilityEqual(mySavedAvailability, draftAvailability)
+    : false;
 
   return (
     <div className="min-h-screen bg-[#f6f7f4] p-3 sm:p-4 lg:p-6">
@@ -692,7 +709,8 @@ export default function Page() {
               </div>
             ) : supabaseRef.current && !authReady ? (
               <div className="rounded-2xl border border-dashed border-amber-300 p-4 text-sm text-amber-700">
-                {authError || "Die anonyme Anmeldung ist noch nicht bereit. Bitte Supabase Auth prüfen und die Seite neu laden."}
+                {authError ||
+                  "Die anonyme Anmeldung ist noch nicht bereit. Bitte Supabase Auth prüfen und die Seite neu laden."}
               </div>
             ) : null}
 
@@ -716,6 +734,13 @@ export default function Page() {
         <Card className="overflow-hidden rounded-[28px] border-slate-200 shadow-sm">
           <CardHeader className="gap-4 border-b border-slate-100 pb-4 sm:pb-5">
             <CardTitle className="text-xl sm:text-2xl">Schritt 2: Zeitfenster auswählen</CardTitle>
+
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <div className="font-semibold">Hinweis</div>
+              <div className="mt-1">
+                Empfohlene Termine sind der 1., 2., 5., 12., 22., 26. und 29. Juni 2026.
+              </div>
+            </div>
 
             <div className="space-y-3">
               <p className="text-base font-medium leading-7 text-slate-700 sm:text-lg">
@@ -882,7 +907,9 @@ export default function Page() {
                     </div>
                     <div
                       className={`mt-1 text-xl font-semibold leading-none sm:text-2xl lg:text-3xl ${
-                        activeCalendarView === "all" && ownDraftHasSelection ? "text-blue-700" : "text-slate-800"
+                        activeCalendarView === "all" && ownDraftHasSelection
+                          ? "text-blue-700"
+                          : "text-slate-800"
                       }`}
                     >
                       {day.getDate()}
